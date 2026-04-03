@@ -3,6 +3,7 @@ package rubbertoe.simple_atlas.debug;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.saveddata.maps.MapId;
 import net.minecraft.world.level.saveddata.maps.MapItemSavedData;
+import org.jspecify.annotations.NonNull;
 import rubbertoe.simple_atlas.component.AtlasContents;
 
 import java.util.ArrayList;
@@ -85,23 +86,7 @@ public final class AtlasLayoutDebugger {
         int width = maxGridX - minGridX + 1;
         int height = maxGridZ - minGridZ + 1;
 
-        List<AtlasMapDebugEntry> entries = new ArrayList<>();
-        for (RawEntry raw : rawEntries) {
-            int tileX = raw.gridX() - minGridX;
-            int tileY = raw.gridZ() - minGridZ;
-
-            entries.add(new AtlasMapDebugEntry(
-                    raw.mapId(),
-                    raw.centerX(),
-                    raw.centerZ(),
-                    raw.scale(),
-                    raw.mapSpan(),
-                    raw.gridX(),
-                    raw.gridZ(),
-                    tileX,
-                    tileY
-            ));
-        }
+        List<AtlasMapDebugEntry> entries = getAtlasMapDebugEntries(rawEntries, minGridX, minGridZ);
 
         entries.sort(Comparator
                 .comparingInt(AtlasMapDebugEntry::tileY)
@@ -122,6 +107,27 @@ public final class AtlasLayoutDebugger {
                 width,
                 height
         );
+    }
+
+    private static @NonNull List<AtlasMapDebugEntry> getAtlasMapDebugEntries(List<RawEntry> rawEntries, int minGridX, int minGridZ) {
+        List<AtlasMapDebugEntry> entries = new ArrayList<>();
+        for (RawEntry raw : rawEntries) {
+            int tileX = raw.gridX() - minGridX;
+            int tileY = raw.gridZ() - minGridZ;
+
+            entries.add(new AtlasMapDebugEntry(
+                    raw.mapId(),
+                    raw.centerX(),
+                    raw.centerZ(),
+                    raw.scale(),
+                    raw.mapSpan(),
+                    raw.gridX(),
+                    raw.gridZ(),
+                    tileX,
+                    tileY
+            ));
+        }
+        return entries;
     }
 
     private static AtlasDebugLayout emptyLayout() {

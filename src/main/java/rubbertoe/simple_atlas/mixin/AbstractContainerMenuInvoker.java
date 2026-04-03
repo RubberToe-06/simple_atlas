@@ -9,6 +9,7 @@ import org.spongepowered.asm.mixin.gen.Invoker;
 public interface AbstractContainerMenuInvoker {
     @Invoker("moveItemStackTo")
     boolean simple_atlas$invokeMoveItemStackTo(ItemStack stack, int startIndex, int endIndex, boolean reverse);
+
     @Invoker("broadcastChanges")
     void simple_atlas$invokeBroadcastChanges();
 }

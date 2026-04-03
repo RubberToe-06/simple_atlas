@@ -10,18 +10,12 @@ import java.util.concurrent.CompletableFuture;
 
 public class SimpleAtlasLangProvider extends FabricLanguageProvider {
 
-    public SimpleAtlasLangProvider(
-            FabricPackOutput output,
-            CompletableFuture<HolderLookup.Provider> registryLookup
-    ) {
+    public SimpleAtlasLangProvider(FabricPackOutput output, CompletableFuture<HolderLookup.Provider> registryLookup) {
         super(output, "en_us", registryLookup);
     }
 
     @Override
-    public void generateTranslations(
-            HolderLookup.@NonNull Provider registryLookup,
-            TranslationBuilder translationBuilder
-    ) {
+    public void generateTranslations(HolderLookup.@NonNull Provider registryLookup, TranslationBuilder translationBuilder) {
         translationBuilder.add(ModItems.ATLAS, "Atlas");
     }
 }
