@@ -1,0 +1,27 @@
+package rubbertoe.simple_atlas.server;
+
+import net.minecraft.server.level.ServerPlayer;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+public final class AtlasViewManager {
+    private AtlasViewManager() {}
+
+    private static final Map<UUID, List<Integer>> ACTIVE_VIEWS = new HashMap<>();
+
+    public static void startViewing(ServerPlayer player, List<Integer> mapIds) {
+        ACTIVE_VIEWS.put(player.getUUID(), List.copyOf(mapIds));
+    }
+
+    public static void stopViewing(ServerPlayer player) {
+        ACTIVE_VIEWS.remove(player.getUUID());
+    }
+
+    public static Iterable<Map.Entry<UUID, List<Integer>>> entries() {
+        return ACTIVE_VIEWS.entrySet();
+    }
+
+}

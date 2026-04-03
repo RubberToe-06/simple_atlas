@@ -1,0 +1,6 @@
+{
+  "model": {
+    "type": "minecraft:model",
+    "model": "simple-atlas:item/map_atlas"
+  }
+}

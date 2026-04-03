@@ -1,0 +1,37 @@
+{
+	"schemaVersion": 1,
+	"id": "simple-atlas",
+	"version": "${version}",
+	"name": "Simple Atlas",
+	"description": "Adds an Atlas so you can take all your maps with you",
+	"authors": [
+		"RubberToe"
+	],
+	"contact": {
+		"homepage": "https://fabricmc.net/",
+		"sources": "https://github.com/FabricMC/fabric-example-mod"
+	},
+	"license": "CC0-1.0",
+	"icon": "assets/simple-atlas/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"rubbertoe.simple_atlas.SimpleAtlas"
+		],
+		"client": [
+			"rubbertoe.simple_atlas.client.SimpleAtlasClient"
+		],
+		"fabric-datagen": [
+			"rubbertoe.simple_atlas.SimpleAtlasDataGenerator"
+		]
+	},
+	"mixins": [
+		"simple-atlas.mixins.json"
+	],
+	"depends": {
+		"fabricloader": ">=0.18.6",
+		"minecraft": "~26.1",
+		"java": ">=25",
+		"fabric-api": "*"
+	}
+}

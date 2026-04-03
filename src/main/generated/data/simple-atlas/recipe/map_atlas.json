@@ -1,0 +1,13 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "equipment",
+  "ingredients": [
+    "minecraft:book",
+    "minecraft:feather",
+    "minecraft:compass",
+    "minecraft:map"
+  ],
+  "result": {
+    "id": "simple-atlas:map_atlas"
+  }
+}

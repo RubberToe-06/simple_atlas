@@ -1,0 +1,16 @@
+{
+  "required": true,
+  "package": "rubbertoe.simple_atlas.mixin",
+  "compatibilityLevel": "JAVA_25",
+  "mixins": [
+    "AbstractContainerMenuInvoker",
+    "CartographyTableAdditionalSlotMixin",
+    "CartographyTableMenuMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  },
+  "overwrites": {
+    "requireAnnotations": true
+	}
+}
