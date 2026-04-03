@@ -17,12 +17,12 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.saveddata.maps.MapId;
 import net.minecraft.world.level.saveddata.maps.MapItemSavedData;
 import org.jspecify.annotations.NonNull;
-import rubbertoe.simple_atlas.debug.AtlasDebugLayout;
-import rubbertoe.simple_atlas.debug.AtlasLayoutDebugger;
+import rubbertoe.simple_atlas.layout.AtlasLayout;
+import rubbertoe.simple_atlas.layout.AtlasLayoutBuilder;
 import rubbertoe.simple_atlas.component.AtlasContents;
 import rubbertoe.simple_atlas.component.ModComponents;
-import rubbertoe.simple_atlas.network.AtlasDebugTilePayload;
-import rubbertoe.simple_atlas.network.OpenAtlasDebugScreenPayload;
+import rubbertoe.simple_atlas.network.AtlasTilePayload;
+import rubbertoe.simple_atlas.network.OpenAtlasScreenPayload;
 import rubbertoe.simple_atlas.server.AtlasViewManager;
 
 public class AtlasItem extends Item {
@@ -30,24 +30,6 @@ public class AtlasItem extends Item {
         super(properties);
     }
 
-    private static boolean hasMatchingScale(ServerLevel level, AtlasContents contents, MapId newMapId) {
-        if (contents.mapIds().isEmpty()) {
-            return true;
-        }
-
-        MapItemSavedData newMapData = level.getMapData(newMapId);
-        if (newMapData == null) {
-            return false;
-        }
-
-        Integer originRawId = contents.mapIds().getFirst();
-        MapItemSavedData originMapData = level.getMapData(new MapId(originRawId));
-        if (originMapData == null) {
-            return false;
-        }
-
-        return newMapData.scale == originMapData.scale;
-    }
 
     @Override
     public @NonNull InteractionResult use(@NonNull Level level, @NonNull Player player, @NonNull InteractionHand hand) {
@@ -76,13 +58,11 @@ public class AtlasItem extends Item {
                 );
                 return InteractionResult.SUCCESS;
             }
-            AtlasDebugLayout layout = AtlasLayoutDebugger.build(serverLevel, contents);
+            AtlasLayout layout = AtlasLayoutBuilder.build(serverLevel, contents);
 
-            OpenAtlasDebugScreenPayload payload = new OpenAtlasDebugScreenPayload(
-                    layout.width(),
-                    layout.height(),
+            OpenAtlasScreenPayload payload = new OpenAtlasScreenPayload(
                     layout.entries().stream()
-                            .map(entry -> new AtlasDebugTilePayload(
+                            .map(entry -> new AtlasTilePayload(
                                     entry.mapId(),
                                     entry.centerX(),
                                     entry.centerZ(),
@@ -120,21 +100,24 @@ public class AtlasItem extends Item {
 
         int mapId = mapIdComponent.id();
 
-        // Scale validation
-        if (!hasMatchingScale(serverLevel, contents, mapIdComponent)) {
+        // Scale validation — single pass, data fetched once and reused for the error message
+        if (!contents.mapIds().isEmpty()) {
             MapItemSavedData newMapData = serverLevel.getMapData(mapIdComponent);
             MapItemSavedData originMapData = serverLevel.getMapData(new MapId(contents.mapIds().getFirst()));
 
-            if (originMapData != null && newMapData != null) {
+            if (newMapData == null || originMapData == null) {
+                return InteractionResult.PASS;
+            }
+
+            if (newMapData.scale != originMapData.scale) {
                 player.sendSystemMessage(
                         Component.literal(
                                 "Map scale mismatch. Atlas scale: " + originMapData.scale +
                                         ", new map scale: " + newMapData.scale
                         ).withStyle(ChatFormatting.RED)
                 );
+                return InteractionResult.SUCCESS;
             }
-
-            return InteractionResult.SUCCESS;
         }
 
         // Duplicate check

@@ -18,6 +18,6 @@ public class SimpleAtlas implements ModInitializer {
 		ModComponents.initialize();
 		ModNetworking.initialize();
 		AtlasViewTicker.initialize();
-		LOGGER.info("Hello Fabric world!");
+		LOGGER.info("Simple Atlas initialized.");
 	}
 }

@@ -13,8 +13,9 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.saveddata.maps.MapId;
 import net.minecraft.world.level.saveddata.maps.MapItemSavedData;
 import org.jspecify.annotations.NonNull;
+import org.lwjgl.glfw.GLFW;
 import rubbertoe.simple_atlas.SimpleAtlas;
-import rubbertoe.simple_atlas.network.AtlasDebugTilePayload;
+import rubbertoe.simple_atlas.network.AtlasTilePayload;
 import rubbertoe.simple_atlas.network.CloseAtlasViewPayload;
 
 import java.util.HashMap;
@@ -27,7 +28,7 @@ public class AtlasScreen extends Screen {
     private static final int TILE_SIZE = 64;
     private final int atlasWidth;
     private final int atlasHeight;
-    private final List<AtlasDebugTilePayload> tiles;
+    private final List<AtlasTilePayload> tiles;
     private double panX = 0;
     private double panY = 0;
     private boolean rightDragging = false;
@@ -36,11 +37,11 @@ public class AtlasScreen extends Screen {
     private static final float MAX_ZOOM = 4.0f;
     private static final float ZOOM_STEP = 1.1f;
 
-    public AtlasScreen(int atlasWidth, int atlasHeight, List<AtlasDebugTilePayload> tiles) {
-        super(Component.literal("Atlas Debug"));
-        this.atlasWidth = atlasWidth;
-        this.atlasHeight = atlasHeight;
+    public AtlasScreen(List<AtlasTilePayload> tiles) {
+        super(Component.literal("Atlas"));
         this.tiles = tiles;
+        this.atlasWidth = tiles.stream().mapToInt(AtlasTilePayload::tileX).max().orElse(0) + 1;
+        this.atlasHeight = tiles.stream().mapToInt(AtlasTilePayload::tileY).max().orElse(0) + 1;
     }
 
     @Override
@@ -89,16 +90,16 @@ public class AtlasScreen extends Screen {
 
         int scaleFactor = 1 << firstData.scale;
         double bestDistSq = Double.MAX_VALUE;
-        AtlasDebugTilePayload bestTile = null;
+        AtlasTilePayload bestTile = null;
         float bestLocalX = 0.0f;
         float bestLocalY = 0.0f;
 
-        AtlasDebugTilePayload fallbackTile = null;
+        AtlasTilePayload fallbackTile = null;
         double fallbackDistSq = Double.MAX_VALUE;
         float fallbackLocalX = 0.0f;
         float fallbackLocalY = 0.0f;
 
-        for (AtlasDebugTilePayload tile : tiles) {
+        for (AtlasTilePayload tile : tiles) {
             double tileWorldMinX = tile.centerX() - 64.0 * scaleFactor;
             double tileWorldMinZ = tile.centerZ() - 64.0 * scaleFactor;
 
@@ -130,7 +131,7 @@ public class AtlasScreen extends Screen {
             }
         }
 
-        AtlasDebugTilePayload chosen;
+        AtlasTilePayload chosen;
         float localX;
         float localY;
 
@@ -237,26 +238,22 @@ public class AtlasScreen extends Screen {
         float originX = (this.width - atlasBaseWidth) / 2.0f;
         float originY = (this.height - atlasBaseHeight) / 2.0f;
 
-        for (AtlasDebugTilePayload tile : tiles) {
+        for (AtlasTilePayload tile : tiles) {
             float x = (float) (originX + panX + tile.tileX() * scaledTileSize);
             float y = (float) (originY + panY + tile.tileY() * scaledTileSize);
 
             renderMapTile(graphics, tile.mapId(), x, y, scaledTileSize / 128.0f);
 
-            float tileScreenSize;
-            tileScreenSize = scaledTileSize;
-            assert minecraft.level != null;
-
             boolean hovered =
                     mouseX >= x &&
-                            mouseX < x + tileScreenSize &&
+                            mouseX < x + scaledTileSize &&
                             mouseY >= y &&
-                            mouseY < y + tileScreenSize;
+                            mouseY < y + scaledTileSize;
 
             if (hovered) {
                 int ix = (int) x;
                 int iy = (int) y;
-                int isize = (int) Math.ceil(tileScreenSize);
+                int isize = (int) Math.ceil(scaledTileSize);
 
                 // subtle translucent white wash
                 graphics.fill(ix, iy, ix + isize, iy + isize, 0x22FFFFFF);
@@ -337,10 +334,9 @@ public class AtlasScreen extends Screen {
 
     @Override
     public boolean keyPressed(KeyEvent event) {
-        if (event.key() == 82) { // R
+        if (event.key() == GLFW.GLFW_KEY_R) {
             this.zoom = 1.0f;
-            this.panX = 0;
-            this.panY = 0;
+            centerOnPlayerPosition();
             return true;
         }
 

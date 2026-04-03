@@ -3,11 +3,12 @@ package rubbertoe.simple_atlas.component;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
-import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Objects;
+import java.util.SequencedSet;
 
-public record AtlasContents(List<Integer> mapIds) {
+public final class AtlasContents {
     public static final AtlasContents EMPTY = new AtlasContents(List.of());
 
     public static final Codec<AtlasContents> CODEC = RecordCodecBuilder.create(instance ->
@@ -18,27 +19,52 @@ public record AtlasContents(List<Integer> mapIds) {
             ).apply(instance, AtlasContents::new)
     );
 
-    public AtlasContents {
-        mapIds = List.copyOf(mapIds);
+    // LinkedHashSet: O(1) contains() + insertion-order iteration
+    private final SequencedSet<Integer> mapIdSet;
+
+    public AtlasContents(List<Integer> mapIds) {
+        this.mapIdSet = new LinkedHashSet<>(mapIds);
     }
 
+    /** Returns map IDs in insertion order. */
+    public List<Integer> mapIds() {
+        return List.copyOf(mapIdSet);
+    }
+
+    /** O(1) membership check. */
     public boolean contains(int mapId) {
-        return mapIds.contains(mapId);
+        return mapIdSet.contains(mapId);
     }
 
+    /** Returns a new {@code AtlasContents} with {@code mapId} appended, or {@code this} if already present. */
     public AtlasContents withAdded(int mapId) {
         if (contains(mapId)) {
             return this;
         }
 
-        List<Integer> updated = new ArrayList<>(mapIds);
+        LinkedHashSet<Integer> updated = new LinkedHashSet<>(mapIdSet);
         updated.add(mapId);
-
-        // safety dedupe while preserving order
-        return new AtlasContents(new ArrayList<>(new LinkedHashSet<>(updated)));
+        return new AtlasContents(List.copyOf(updated));
     }
 
     public int size() {
-        return mapIds.size();
+        return mapIdSet.size();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof AtlasContents other)) return false;
+        return mapIdSet.equals(other.mapIdSet);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hashCode(mapIdSet);
+    }
+
+    @Override
+    public String toString() {
+        return "AtlasContents{mapIds=" + mapIdSet + "}";
     }
 }

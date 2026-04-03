@@ -1,6 +1,7 @@
 package rubbertoe.simple_atlas.server;
 
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
@@ -18,6 +19,9 @@ public final class AtlasViewTicker {
 
     public static void initialize() {
         ServerTickEvents.END_SERVER_TICK.register(AtlasViewTicker::tick);
+        ServerPlayConnectionEvents.DISCONNECT.register((handler, _) ->
+                AtlasViewManager.stopViewing(handler.player)
+        );
     }
 
     private static void tick(MinecraftServer server) {
@@ -29,8 +33,6 @@ public final class AtlasViewTicker {
             ServerPlayer player = server.getPlayerList().getPlayer(entry.getKey());
             if (player == null) {
                 continue;
-            } else {
-                player.level();
             }
 
             for (int rawId : entry.getValue()) {

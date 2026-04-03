@@ -1,9 +1,9 @@
-package rubbertoe.simple_atlas.debug;
+package rubbertoe.simple_atlas.layout;
 
 import java.util.List;
 
-public record AtlasDebugLayout(
-        List<AtlasMapDebugEntry> entries,
+public record AtlasLayout(
+        List<AtlasMapEntry> entries,
         int originMapId,
         int originCenterX,
         int originCenterZ,
@@ -16,3 +16,4 @@ public record AtlasDebugLayout(
         int width,
         int height
 ) {}
+

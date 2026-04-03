@@ -9,8 +9,8 @@ public final class ModNetworking {
 
     public static void initialize() {
         PayloadTypeRegistry.clientboundPlay().register(
-                OpenAtlasDebugScreenPayload.TYPE,
-                OpenAtlasDebugScreenPayload.CODEC
+                OpenAtlasScreenPayload.TYPE,
+                OpenAtlasScreenPayload.CODEC
         );
         PayloadTypeRegistry.serverboundPlay().register(
                 CloseAtlasViewPayload.TYPE,

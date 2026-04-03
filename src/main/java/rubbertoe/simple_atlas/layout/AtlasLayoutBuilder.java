@@ -1,4 +1,4 @@
-package rubbertoe.simple_atlas.debug;
+package rubbertoe.simple_atlas.layout;
 
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.saveddata.maps.MapId;
@@ -10,10 +10,10 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 
-public final class AtlasLayoutDebugger {
-    private AtlasLayoutDebugger() {}
+public final class AtlasLayoutBuilder {
+    private AtlasLayoutBuilder() {}
 
-    public static AtlasDebugLayout build(ServerLevel level, AtlasContents contents) {
+    public static AtlasLayout build(ServerLevel level, AtlasContents contents) {
         if (contents.mapIds().isEmpty()) {
             return emptyLayout();
         }
@@ -40,7 +40,8 @@ public final class AtlasLayoutDebugger {
             return emptyLayout();
         }
 
-        resolved.sort(Comparator.comparingInt(ResolvedMap::mapId));
+        // Use the first successfully resolved map (insertion order) as the grid origin.
+        // Insertion order is guaranteed by AtlasContents, which uses a LinkedHashSet internally.
         ResolvedMap origin = resolved.getFirst();
 
         int originScale = origin.scale();
@@ -86,14 +87,14 @@ public final class AtlasLayoutDebugger {
         int width = maxGridX - minGridX + 1;
         int height = maxGridZ - minGridZ + 1;
 
-        List<AtlasMapDebugEntry> entries = getAtlasMapDebugEntries(rawEntries, minGridX, minGridZ);
+        List<AtlasMapEntry> entries = buildEntries(rawEntries, minGridX, minGridZ);
 
         entries.sort(Comparator
-                .comparingInt(AtlasMapDebugEntry::tileY)
-                .thenComparingInt(AtlasMapDebugEntry::tileX)
-                .thenComparingInt(AtlasMapDebugEntry::mapId));
+                .comparingInt(AtlasMapEntry::tileY)
+                .thenComparingInt(AtlasMapEntry::tileX)
+                .thenComparingInt(AtlasMapEntry::mapId));
 
-        return new AtlasDebugLayout(
+        return new AtlasLayout(
                 entries,
                 origin.mapId(),
                 origin.centerX(),
@@ -109,13 +110,13 @@ public final class AtlasLayoutDebugger {
         );
     }
 
-    private static @NonNull List<AtlasMapDebugEntry> getAtlasMapDebugEntries(List<RawEntry> rawEntries, int minGridX, int minGridZ) {
-        List<AtlasMapDebugEntry> entries = new ArrayList<>();
+    private static @NonNull List<AtlasMapEntry> buildEntries(List<RawEntry> rawEntries, int minGridX, int minGridZ) {
+        List<AtlasMapEntry> entries = new ArrayList<>();
         for (RawEntry raw : rawEntries) {
             int tileX = raw.gridX() - minGridX;
             int tileY = raw.gridZ() - minGridZ;
 
-            entries.add(new AtlasMapDebugEntry(
+            entries.add(new AtlasMapEntry(
                     raw.mapId(),
                     raw.centerX(),
                     raw.centerZ(),
@@ -130,37 +131,15 @@ public final class AtlasLayoutDebugger {
         return entries;
     }
 
-    private static AtlasDebugLayout emptyLayout() {
-        return new AtlasDebugLayout(
+    private static AtlasLayout emptyLayout() {
+        return new AtlasLayout(
                 List.of(),
-                -1,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0
+                -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
         );
     }
 
-    private record ResolvedMap(
-            int mapId,
-            int centerX,
-            int centerZ,
-            int scale
-    ) {}
+    private record ResolvedMap(int mapId, int centerX, int centerZ, int scale) {}
 
-    private record RawEntry(
-            int mapId,
-            int centerX,
-            int centerZ,
-            int scale,
-            int mapSpan,
-            int gridX,
-            int gridZ
-    ) {}
+    private record RawEntry(int mapId, int centerX, int centerZ, int scale, int mapSpan, int gridX, int gridZ) {}
 }
+
