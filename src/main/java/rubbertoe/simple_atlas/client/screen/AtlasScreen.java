@@ -21,7 +21,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class AtlasDebugScreen extends Screen {
+public class AtlasScreen extends Screen {
     private final Map<Integer, MapRenderState> renderStates = new HashMap<>();
     private static final Identifier PLAYER_MARKER_TEXTURE = Identifier.fromNamespaceAndPath(SimpleAtlas.MOD_ID, "textures/gui/player_marker.png");
     private static final int TILE_SIZE = 64;
@@ -31,12 +31,12 @@ public class AtlasDebugScreen extends Screen {
     private double panX = 0;
     private double panY = 0;
     private boolean rightDragging = false;
-    private float zoom = 1.0f;
+    private float zoom = 2.0f;
     private static final float MIN_ZOOM = 0.25f;
     private static final float MAX_ZOOM = 4.0f;
     private static final float ZOOM_STEP = 1.1f;
 
-    public AtlasDebugScreen(int atlasWidth, int atlasHeight, List<AtlasDebugTilePayload> tiles) {
+    public AtlasScreen(int atlasWidth, int atlasHeight, List<AtlasDebugTilePayload> tiles) {
         super(Component.literal("Atlas Debug"));
         this.atlasWidth = atlasWidth;
         this.atlasHeight = atlasHeight;
@@ -46,6 +46,28 @@ public class AtlasDebugScreen extends Screen {
     @Override
     protected void init() {
         super.init();
+        centerOnPlayerPosition();
+    }
+
+    private void centerOnPlayerPosition() {
+        float scaledTileSize = TILE_SIZE * zoom;
+
+        // Start from neutral pan so anchor is computed in base atlas position
+        this.panX = 0;
+        this.panY = 0;
+
+        float atlasBaseWidth = atlasWidth * TILE_SIZE;
+        float atlasBaseHeight = atlasHeight * TILE_SIZE;
+        float originX = (this.width - atlasBaseWidth) / 2.0f;
+        float originY = (this.height - atlasBaseHeight) / 2.0f;
+
+        MarkerAnchor anchor = findPlayerMarkerAnchor(originX, originY, scaledTileSize);
+        if (anchor == null) {
+            return;
+        }
+
+        this.panX = this.width / 2.0 - anchor.screenX();
+        this.panY = this.height / 2.0 - anchor.screenY();
     }
 
     private record MarkerAnchor(float screenX, float screenY) {}
