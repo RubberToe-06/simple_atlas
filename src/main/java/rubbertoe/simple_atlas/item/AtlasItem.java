@@ -13,10 +13,14 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.TooltipFlag;
+import net.minecraft.world.item.component.TooltipDisplay;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.saveddata.maps.MapId;
 import net.minecraft.world.level.saveddata.maps.MapItemSavedData;
 import org.jspecify.annotations.NonNull;
+
+import java.util.function.Consumer;
 import rubbertoe.simple_atlas.layout.AtlasLayout;
 import rubbertoe.simple_atlas.layout.AtlasLayoutBuilder;
 import rubbertoe.simple_atlas.component.AtlasContents;
@@ -30,6 +34,40 @@ public class AtlasItem extends Item {
         super(properties);
     }
 
+    @Override
+    @SuppressWarnings("deprecation")
+    public void appendHoverText(
+            @NonNull ItemStack stack,
+            Item.@NonNull TooltipContext context,
+            @NonNull TooltipDisplay tooltipDisplay,
+            @NonNull Consumer<Component> tooltipComponents,
+            @NonNull TooltipFlag flag
+    ) {
+        AtlasContents contents = stack.getOrDefault(ModComponents.ATLAS_CONTENTS, AtlasContents.EMPTY);
+
+        if (contents.mapIds().isEmpty()) {
+            tooltipComponents.accept(
+                    Component.literal("No maps · Add via cartography table")
+                            .withStyle(ChatFormatting.GRAY)
+            );
+            return;
+        }
+
+        int count = contents.size();
+        tooltipComponents.accept(
+                Component.literal("Maps: " + count)
+                        .withStyle(ChatFormatting.GRAY)
+        );
+
+        // TooltipContext.mapData() gives us map data directly — no level reference needed
+        MapItemSavedData mapData = context.mapData(new MapId(contents.mapIds().getFirst()));
+        if (mapData != null) {
+            tooltipComponents.accept(
+                    Component.literal("Scale: " + mapData.scale)
+                            .withStyle(ChatFormatting.GRAY)
+            );
+        }
+    }
 
     @Override
     public @NonNull InteractionResult use(@NonNull Level level, @NonNull Player player, @NonNull InteractionHand hand) {
