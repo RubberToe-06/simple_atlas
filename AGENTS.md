@@ -30,6 +30,12 @@
 - Regenerate data assets: `./gradlew.bat runDatagen`.
 - Inspect available tasks: `./gradlew.bat tasks --all`.
 
+## Agent Tooling
+- `minecraft-dev-mcp` tools are available in this environment; use them to inspect decompiled Minecraft `26.1` classes, method signatures, packets, registries, and mapping names before changing version-sensitive code.
+- Prefer checking vanilla call paths and APIs with those tools before editing `mixin/CartographyTableMenuMixin.java`, `client/screen/AtlasScreen.java`, map sync code, or other internals tied closely to Minecraft updates.
+- Useful targets to inspect first include `MapItemSavedData`, `CartographyTableMenu`, map packet classes, and rendering classes used by `AtlasScreen.extractRenderState()`.
+- If a behavior depends on Minecraft internals, verify the exact `26.1` implementation with `minecraft-dev-mcp` rather than assuming older Yarn/Fabric examples still apply.
+
 ## Project-Specific Conventions
 - Registry helper pattern: keep registration helpers in module-local classes (example: `item/ModItems.register(...)`).
 - Use `Identifier.fromNamespaceAndPath(SimpleAtlas.MOD_ID, ...)` for IDs; avoid hard-coded namespace strings.

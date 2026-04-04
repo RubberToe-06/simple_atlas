@@ -9,12 +9,16 @@ import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.client.renderer.state.MapRenderState;
 import net.minecraft.network.chat.Component;
+import net.minecraft.util.Mth;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.saveddata.maps.MapId;
 import net.minecraft.world.level.saveddata.maps.MapItemSavedData;
 import org.jspecify.annotations.NonNull;
 import org.lwjgl.glfw.GLFW;
 import rubbertoe.simple_atlas.SimpleAtlas;
+import rubbertoe.simple_atlas.client.screen.icon.AtlasIcon;
+import rubbertoe.simple_atlas.client.screen.icon.PlayerAtlasIcon;
+import rubbertoe.simple_atlas.client.screen.icon.RedSquareAtlasIcon;
 import rubbertoe.simple_atlas.network.AtlasTilePayload;
 import rubbertoe.simple_atlas.network.CloseAtlasViewPayload;
 
@@ -24,11 +28,28 @@ import java.util.Map;
 
 public class AtlasScreen extends Screen {
     private final Map<Integer, MapRenderState> renderStates = new HashMap<>();
+    private static final Identifier ATLAS_BACKGROUND_TEXTURE = Identifier.fromNamespaceAndPath(SimpleAtlas.MOD_ID, "textures/gui/atlas_background.png");
+    private static final int ATLAS_BACKGROUND_TEXTURE_WIDTH = 256;
+    private static final int ATLAS_BACKGROUND_TEXTURE_HEIGHT = 180;
+    private static final float BOOK_TARGET_UI_SCALE = 3.0f;
+    private static final int BOOK_SCREEN_MARGIN = 16;
+    private static final int PAGE_AREA_X = 10;
+    private static final int PAGE_AREA_Y = 18;
+    private static final int PAGE_AREA_WIDTH = 236;
+    private static final int PAGE_AREA_HEIGHT = 143;
     private static final Identifier PLAYER_MARKER_TEXTURE = Identifier.fromNamespaceAndPath(SimpleAtlas.MOD_ID, "textures/gui/player_marker.png");
+    private static final int PLAYER_MARKER_TEXTURE_SIZE = 14;
+    private static final int PLAYER_MARKER_RENDER_SIZE = 12;
+    private static final int WAYPOINT_MARKER_SIZE = 10;
+    private static final int WAYPOINT_MARKER_COLOR = 0xFFFF3B30;
+    private static final Component WAYPOINT_MARKER_TITLE = Component.literal("Waypoint");
+    private static final int ICON_HOVER_TITLE_PADDING = 4;
     private static final int TILE_SIZE = 64;
     private final int atlasWidth;
     private final int atlasHeight;
     private final List<AtlasTilePayload> tiles;
+    private final PlayerAtlasIcon playerIcon;
+    private final List<AtlasIcon> atlasIcons;
     private double panX = 0;
     private double panY = 0;
     private boolean rightDragging = false;
@@ -42,6 +63,29 @@ public class AtlasScreen extends Screen {
         this.tiles = tiles;
         this.atlasWidth = tiles.stream().mapToInt(AtlasTilePayload::tileX).max().orElse(0) + 1;
         this.atlasHeight = tiles.stream().mapToInt(AtlasTilePayload::tileY).max().orElse(0) + 1;
+        this.playerIcon = new PlayerAtlasIcon(
+                PLAYER_MARKER_TEXTURE,
+                PLAYER_MARKER_TEXTURE_SIZE,
+                PLAYER_MARKER_TEXTURE_SIZE,
+                PLAYER_MARKER_RENDER_SIZE,
+                PLAYER_MARKER_RENDER_SIZE
+        );
+
+        AtlasTilePayload anchorTile = tiles.isEmpty() ? null : tiles.getFirst();
+        double waypointX = anchorTile != null ? anchorTile.centerX() : 0.0;
+        double waypointZ = anchorTile != null ? anchorTile.centerZ() : 0.0;
+
+        AtlasIcon waypointIcon = new RedSquareAtlasIcon(
+                PLAYER_MARKER_TEXTURE,
+                WAYPOINT_MARKER_SIZE,
+                WAYPOINT_MARKER_SIZE,
+                waypointX,
+                waypointZ,
+                WAYPOINT_MARKER_TITLE,
+                WAYPOINT_MARKER_COLOR
+        );
+
+        this.atlasIcons = List.of(this.playerIcon, waypointIcon);
     }
 
     @Override
@@ -50,154 +94,61 @@ public class AtlasScreen extends Screen {
         centerOnPlayerPosition();
     }
 
+    private record AtlasViewport(float x, float y, float width, float height, float contentX, float contentY, float contentWidth, float contentHeight) {}
+
+    private AtlasViewport getAtlasViewport() {
+        float availableWidth = Math.max(32.0f, this.width - BOOK_SCREEN_MARGIN * 2.0f);
+        float availableHeight = Math.max(32.0f, this.height - BOOK_SCREEN_MARGIN * 2.0f);
+        float fitScaleX = availableWidth / ATLAS_BACKGROUND_TEXTURE_WIDTH;
+        float fitScaleY = availableHeight / ATLAS_BACKGROUND_TEXTURE_HEIGHT;
+        float scale = Math.clamp(fitScaleX, 0.25f, Math.min(BOOK_TARGET_UI_SCALE, fitScaleY));
+
+        float width = ATLAS_BACKGROUND_TEXTURE_WIDTH * scale;
+        float height = ATLAS_BACKGROUND_TEXTURE_HEIGHT * scale;
+        float x = (this.width - width) / 2.0f;
+        float y = (this.height - height) / 2.0f;
+
+        float contentX = x + PAGE_AREA_X * scale;
+        float contentY = y + PAGE_AREA_Y * scale;
+        float contentWidth = PAGE_AREA_WIDTH * scale;
+        float contentHeight = PAGE_AREA_HEIGHT * scale;
+
+        return new AtlasViewport(x, y, width, height, contentX, contentY, contentWidth, contentHeight);
+    }
+
+    private float getMapOriginX(AtlasViewport viewport, float scaledTileSize) {
+        float atlasPixelWidth = atlasWidth * scaledTileSize;
+        return viewport.contentX() + (viewport.contentWidth() - atlasPixelWidth) / 2.0f;
+    }
+
+    private float getMapOriginY(AtlasViewport viewport, float scaledTileSize) {
+        float atlasPixelHeight = atlasHeight * scaledTileSize;
+        return viewport.contentY() + (viewport.contentHeight() - atlasPixelHeight) / 2.0f;
+    }
+
     private void centerOnPlayerPosition() {
+        centerOnIcon(this.playerIcon);
+    }
+
+    private void centerOnIcon(AtlasIcon icon) {
         float scaledTileSize = TILE_SIZE * zoom;
+        AtlasViewport viewport = getAtlasViewport();
+        Minecraft minecraft = Minecraft.getInstance();
 
         // Start from neutral pan so anchor is computed in base atlas position
         this.panX = 0;
         this.panY = 0;
 
-        float atlasBaseWidth = atlasWidth * TILE_SIZE;
-        float atlasBaseHeight = atlasHeight * TILE_SIZE;
-        float originX = (this.width - atlasBaseWidth) / 2.0f;
-        float originY = (this.height - atlasBaseHeight) / 2.0f;
+        float originX = getMapOriginX(viewport, scaledTileSize);
+        float originY = getMapOriginY(viewport, scaledTileSize);
 
-        MarkerAnchor anchor = findPlayerMarkerAnchor(originX, originY, scaledTileSize);
+        AtlasIcon.Anchor anchor = icon.resolveAnchor(minecraft, tiles, originX, originY, scaledTileSize);
         if (anchor == null) {
             return;
         }
 
-        this.panX = this.width / 2.0 - anchor.screenX();
-        this.panY = this.height / 2.0 - anchor.screenY();
-    }
-
-    private record MarkerAnchor(float screenX, float screenY) {}
-
-    private MarkerAnchor findPlayerMarkerAnchor(float originX, float originY, float scaledTileSize) {
-        Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.player == null || minecraft.level == null || tiles.isEmpty()) {
-            return null;
-        }
-
-        double playerX = minecraft.player.getX();
-        double playerZ = minecraft.player.getZ();
-
-        // All atlas maps are same scale; your add logic enforces that.
-        MapItemSavedData firstData = minecraft.level.getMapData(new MapId(tiles.getFirst().mapId()));
-        if (firstData == null) {
-            return null;
-        }
-
-        int scaleFactor = 1 << firstData.scale;
-        double bestDistSq = Double.MAX_VALUE;
-        AtlasTilePayload bestTile = null;
-        float bestLocalX = 0.0f;
-        float bestLocalY = 0.0f;
-
-        AtlasTilePayload fallbackTile = null;
-        double fallbackDistSq = Double.MAX_VALUE;
-        float fallbackLocalX = 0.0f;
-        float fallbackLocalY = 0.0f;
-
-        for (AtlasTilePayload tile : tiles) {
-            double tileWorldMinX = tile.centerX() - 64.0 * scaleFactor;
-            double tileWorldMinZ = tile.centerZ() - 64.0 * scaleFactor;
-
-            double localPixelX = (playerX - tileWorldMinX) / scaleFactor;
-            double localPixelY = (playerZ - tileWorldMinZ) / scaleFactor;
-
-            boolean inside =
-                    localPixelX >= 0.0 && localPixelX < 128.0 &&
-                            localPixelY >= 0.0 && localPixelY < 128.0;
-
-            double dx = playerX - tile.centerX();
-            double dz = playerZ - tile.centerZ();
-            double distSq = dx * dx + dz * dz;
-
-            if (inside) {
-                if (distSq < bestDistSq) {
-                    bestDistSq = distSq;
-                    bestTile = tile;
-                    bestLocalX = (float) localPixelX;
-                    bestLocalY = (float) localPixelY;
-                }
-            }
-
-            if (distSq < fallbackDistSq) {
-                fallbackDistSq = distSq;
-                fallbackTile = tile;
-                fallbackLocalX = (float) localPixelX;
-                fallbackLocalY = (float) localPixelY;
-            }
-        }
-
-        AtlasTilePayload chosen;
-        float localX;
-        float localY;
-
-        if (bestTile != null) {
-            chosen = bestTile;
-            localX = bestLocalX;
-            localY = bestLocalY;
-        } else if (fallbackTile != null) {
-            chosen = fallbackTile;
-            localX = fallbackLocalX;
-            localY = fallbackLocalY;
-        } else {
-            return null;
-        }
-
-        float tileScreenX = (float) (originX + panX + chosen.tileX() * scaledTileSize);
-        float tileScreenY = (float) (originY + panY + chosen.tileY() * scaledTileSize);
-
-        float px = tileScreenX + localX * (scaledTileSize / 128.0f);
-        float py = tileScreenY + localY * (scaledTileSize / 128.0f);
-
-        return new MarkerAnchor(px, py);
-    }
-    private void renderGlobalPlayerMarker(
-            GuiGraphicsExtractor graphics,
-            float originX,
-            float originY,
-            float scaledTileSize
-    ) {
-        Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.player == null) {
-            return;
-        }
-
-        MarkerAnchor anchor = findPlayerMarkerAnchor(originX, originY, scaledTileSize);
-        if (anchor == null) {
-            return;
-        }
-
-        final int textureSize = 16;
-        final int size = 14;
-
-        float yaw = minecraft.player.getYRot();
-        int rot = (int) ((yaw + 180.0f) * 16.0f / 360.0f);
-        float angleRadians = (float) Math.toRadians(rot * 360.0f / 16.0f);
-
-        graphics.pose().pushMatrix();
-        graphics.pose().translate(anchor.screenX(), anchor.screenY());
-        graphics.pose().rotate(angleRadians);
-
-        graphics.blit(
-                RenderPipelines.GUI_TEXTURED,
-                PLAYER_MARKER_TEXTURE,
-                -size / 2,
-                -size / 2,
-                0.0f,
-                0.0f,
-                size,
-                size,
-                textureSize,
-                textureSize,
-                textureSize,
-                textureSize
-        );
-
-        graphics.pose().popMatrix();
+        this.panX = viewport.contentX() + viewport.contentWidth() / 2.0 - anchor.screenX();
+        this.panY = viewport.contentY() + viewport.contentHeight() / 2.0 - anchor.screenY();
     }
 
     private void renderMapTile(GuiGraphicsExtractor graphics, int mapId, float x, float y, float scale) {
@@ -225,22 +176,101 @@ public class AtlasScreen extends Screen {
         graphics.pose().popMatrix();
     }
 
+    private void renderAtlasBackground(
+            GuiGraphicsExtractor graphics,
+            AtlasViewport viewport
+    ) {
+        int x = (int) Math.floor(viewport.x());
+        int y = (int) Math.floor(viewport.y());
+        int width = (int) Math.ceil(viewport.width());
+        int height = (int) Math.ceil(viewport.height());
+
+        graphics.blit(
+                RenderPipelines.GUI_TEXTURED,
+                ATLAS_BACKGROUND_TEXTURE,
+                x,
+                y,
+                0.0f,
+                0.0f,
+                width,
+                height,
+                ATLAS_BACKGROUND_TEXTURE_WIDTH,
+                ATLAS_BACKGROUND_TEXTURE_HEIGHT,
+                ATLAS_BACKGROUND_TEXTURE_WIDTH,
+                ATLAS_BACKGROUND_TEXTURE_HEIGHT
+        );
+    }
+
+    private record HoveredAtlasIcon(AtlasIcon icon, AtlasIcon.Anchor anchor, Component title) {}
+
+    private HoveredAtlasIcon findHoveredIcon(
+            Minecraft minecraft,
+            float mapOriginX,
+            float mapOriginY,
+            float scaledTileSize,
+            int mouseX,
+            int mouseY
+    ) {
+        for (int i = atlasIcons.size() - 1; i >= 0; i--) {
+            AtlasIcon icon = atlasIcons.get(i);
+            AtlasIcon.Anchor anchor = icon.resolveAnchor(minecraft, tiles, mapOriginX, mapOriginY, scaledTileSize);
+            if (anchor == null || !icon.containsPoint(anchor, mouseX, mouseY)) {
+                continue;
+            }
+
+            Component title = icon.resolveHoverTitle(minecraft);
+            if (title != null) {
+                return new HoveredAtlasIcon(icon, anchor, title);
+            }
+        }
+
+        return null;
+    }
+
+    private void renderHoveredIconTitle(
+            GuiGraphicsExtractor graphics,
+            AtlasViewport viewport,
+            HoveredAtlasIcon hoveredIcon
+    ) {
+        int textWidth = this.font.width(hoveredIcon.title());
+        int minX = (int) Math.floor(viewport.contentX()) + 2;
+        int maxX = (int) Math.ceil(viewport.contentX() + viewport.contentWidth()) - textWidth - 2;
+        int centeredX = Mth.floor(hoveredIcon.anchor().screenX() - textWidth / 2.0f);
+        int textX = maxX >= minX ? Mth.clamp(centeredX, minX, maxX) : centeredX;
+
+        int minY = (int) Math.floor(viewport.contentY()) + 2;
+        int maxY = (int) Math.ceil(viewport.contentY() + viewport.contentHeight()) - this.font.lineHeight - 2;
+        int preferredY = Mth.floor(hoveredIcon.anchor().screenY() + hoveredIcon.icon().renderHeight() / 2.0f + ICON_HOVER_TITLE_PADDING);
+        int textY = maxY >= minY ? Mth.clamp(preferredY, minY, maxY) : preferredY;
+
+        graphics.textWithBackdrop(this.font, hoveredIcon.title(), textX, textY, textWidth, 0xFFFFFFFF);
+    }
+
     @Override
     public void extractRenderState(@NonNull GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
         super.extractRenderState(graphics, mouseX, mouseY, delta);
 
         float scaledTileSize = TILE_SIZE * zoom;
+        AtlasViewport viewport = getAtlasViewport();
+        Minecraft minecraft = Minecraft.getInstance();
 
-        // anchor atlas around screen center at zoom-neutral origin
-        float atlasBaseWidth = atlasWidth * TILE_SIZE;
-        float atlasBaseHeight = atlasHeight * TILE_SIZE;
+        float originX = getMapOriginX(viewport, scaledTileSize);
+        float originY = getMapOriginY(viewport, scaledTileSize);
+        float mapOriginX = (float) (originX + panX);
+        float mapOriginY = (float) (originY + panY);
+        HoveredAtlasIcon hoveredIcon = null;
 
-        float originX = (this.width - atlasBaseWidth) / 2.0f;
-        float originY = (this.height - atlasBaseHeight) / 2.0f;
+        renderAtlasBackground(graphics, viewport);
+
+        int clipX1 = (int) Math.floor(viewport.contentX());
+        int clipY1 = (int) Math.floor(viewport.contentY());
+        int clipX2 = (int) Math.ceil(viewport.contentX() + viewport.contentWidth());
+        int clipY2 = (int) Math.ceil(viewport.contentY() + viewport.contentHeight());
+        graphics.enableScissor(clipX1, clipY1, clipX2, clipY2);
 
         for (AtlasTilePayload tile : tiles) {
-            float x = (float) (originX + panX + tile.tileX() * scaledTileSize);
-            float y = (float) (originY + panY + tile.tileY() * scaledTileSize);
+            float x = mapOriginX + tile.tileX() * scaledTileSize;
+            float y = mapOriginY + tile.tileY() * scaledTileSize;
 
             renderMapTile(graphics, tile.mapId(), x, y, scaledTileSize / 128.0f);
 
@@ -262,7 +292,17 @@ public class AtlasScreen extends Screen {
                 //graphics.outline(ix, iy, isize, isize, 0x66FFFFFF);
             }
         }
-        renderGlobalPlayerMarker(graphics, originX, originY, scaledTileSize);
+
+        for (AtlasIcon atlasIcon : atlasIcons) {
+            atlasIcon.render(graphics, minecraft, tiles, mapOriginX, mapOriginY, scaledTileSize);
+        }
+
+        hoveredIcon = findHoveredIcon(minecraft, mapOriginX, mapOriginY, scaledTileSize, mouseX, mouseY);
+        if (hoveredIcon != null) {
+            renderHoveredIconTitle(graphics, viewport, hoveredIcon);
+        }
+
+        graphics.disableScissor();
     }
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
@@ -299,6 +339,7 @@ public class AtlasScreen extends Screen {
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
         float oldZoom = this.zoom;
         float newZoom;
+        AtlasViewport viewport = getAtlasViewport();
 
         if (scrollY > 0) {
             newZoom = Math.min(MAX_ZOOM, oldZoom * ZOOM_STEP);
@@ -312,22 +353,23 @@ public class AtlasScreen extends Screen {
             return true;
         }
 
-        // Must match extractRenderState()
-        float atlasBaseWidth = atlasWidth * TILE_SIZE;
-        float atlasBaseHeight = atlasHeight * TILE_SIZE;
-
-        float originX = (this.width - atlasBaseWidth) / 2.0f;
-        float originY = (this.height - atlasBaseHeight) / 2.0f;
+        float oldScaledTileSize = TILE_SIZE * oldZoom;
+        float oldOriginX = getMapOriginX(viewport, oldScaledTileSize);
+        float oldOriginY = getMapOriginY(viewport, oldScaledTileSize);
 
         // atlas-space position under cursor before zoom
-        double atlasX = (mouseX - originX - panX) / oldZoom;
-        double atlasY = (mouseY - originY - panY) / oldZoom;
+        double atlasX = (mouseX - oldOriginX - panX) / oldZoom;
+        double atlasY = (mouseY - oldOriginY - panY) / oldZoom;
 
         this.zoom = newZoom;
 
+        float newScaledTileSize = TILE_SIZE * newZoom;
+        float newOriginX = getMapOriginX(viewport, newScaledTileSize);
+        float newOriginY = getMapOriginY(viewport, newScaledTileSize);
+
         // keep same atlas-space point under cursor
-        this.panX = (float) (mouseX - originX - atlasX * newZoom);
-        this.panY = (float) (mouseY - originY - atlasY * newZoom);
+        this.panX = (float) (mouseX - newOriginX - atlasX * newZoom);
+        this.panY = (float) (mouseY - newOriginY - atlasY * newZoom);
 
         return true;
     }
