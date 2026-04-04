@@ -50,10 +50,6 @@ public final class AtlasContents {
     private final int selectedWaypointIconIndex;
     private final int nextWaypointNumber;
 
-    public AtlasContents(List<Integer> mapIds) {
-        this(mapIds, List.of(), 0, 1);
-    }
-
     public AtlasContents(
             List<Integer> mapIds,
             List<WaypointData> waypoints,
