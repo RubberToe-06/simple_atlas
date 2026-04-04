@@ -4,6 +4,7 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.CharacterEvent;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.renderer.RenderPipelines;
@@ -18,10 +19,12 @@ import org.lwjgl.glfw.GLFW;
 import rubbertoe.simple_atlas.SimpleAtlas;
 import rubbertoe.simple_atlas.client.screen.icon.AtlasIcon;
 import rubbertoe.simple_atlas.client.screen.icon.PlayerAtlasIcon;
-import rubbertoe.simple_atlas.client.screen.icon.RedSquareAtlasIcon;
+import rubbertoe.simple_atlas.client.screen.icon.StaticAtlasIcon;
+import rubbertoe.simple_atlas.client.waypoint.AtlasWaypointStore;
 import rubbertoe.simple_atlas.network.AtlasTilePayload;
 import rubbertoe.simple_atlas.network.CloseAtlasViewPayload;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -40,9 +43,9 @@ public class AtlasScreen extends Screen {
     private static final Identifier PLAYER_MARKER_TEXTURE = Identifier.fromNamespaceAndPath(SimpleAtlas.MOD_ID, "textures/gui/player_marker.png");
     private static final int PLAYER_MARKER_TEXTURE_SIZE = 14;
     private static final int PLAYER_MARKER_RENDER_SIZE = 12;
-    private static final int WAYPOINT_MARKER_SIZE = 10;
-    private static final int WAYPOINT_MARKER_COLOR = 0xFFFF3B30;
-    private static final Component WAYPOINT_MARKER_TITLE = Component.literal("Waypoint");
+    private static final int WAYPOINT_TEXTURE_SIZE = 16;
+    private static final int WAYPOINT_RENDER_SIZE = 12;
+    private static final int WAYPOINT_NAME_MAX_LENGTH = 32;
     private static final int ICON_HOVER_TITLE_PADDING = 4;
     private static final int TILE_SIZE = 64;
     private final int atlasWidth;
@@ -50,6 +53,11 @@ public class AtlasScreen extends Screen {
     private final List<AtlasTilePayload> tiles;
     private final PlayerAtlasIcon playerIcon;
     private final List<AtlasIcon> atlasIcons;
+    private final List<WaypointIconOption> waypointIconOptions;
+    private final AtlasWaypointStore.WaypointState waypointState;
+    private int selectedWaypointIconIndex = 0;
+    private int nextWaypointNumber = 1;
+    private WaypointDraft waypointDraft;
     private double panX = 0;
     private double panY = 0;
     private boolean rightDragging = false;
@@ -58,9 +66,43 @@ public class AtlasScreen extends Screen {
     private static final float MAX_ZOOM = 4.0f;
     private static final float ZOOM_STEP = 1.1f;
 
-    public AtlasScreen(List<AtlasTilePayload> tiles) {
+    private record WaypointIconOption(String name, Identifier texture) {}
+
+    private static List<WaypointIconOption> createWaypointIconOptions() {
+        return List.of(
+                new WaypointIconOption("Red Banner", Identifier.fromNamespaceAndPath(SimpleAtlas.MOD_ID, "textures/gui/icons/red_banner.png")),
+                new WaypointIconOption("White Banner", Identifier.fromNamespaceAndPath(SimpleAtlas.MOD_ID, "textures/gui/icons/white_banner.png")),
+                new WaypointIconOption("Yellow Banner", Identifier.fromNamespaceAndPath(SimpleAtlas.MOD_ID, "textures/gui/icons/yellow_banner.png")),
+                new WaypointIconOption("Orange Banner", Identifier.fromNamespaceAndPath(SimpleAtlas.MOD_ID, "textures/gui/icons/orange_banner.png")),
+                new WaypointIconOption("Magenta Banner", Identifier.fromNamespaceAndPath(SimpleAtlas.MOD_ID, "textures/gui/icons/magenta_banner.png")),
+                new WaypointIconOption("Lime Banner", Identifier.fromNamespaceAndPath(SimpleAtlas.MOD_ID, "textures/gui/icons/lime_banner.png")),
+                new WaypointIconOption("Nether Portal", Identifier.fromNamespaceAndPath(SimpleAtlas.MOD_ID, "textures/gui/icons/nether_portal.png")),
+                new WaypointIconOption("Ocean Monument", Identifier.fromNamespaceAndPath(SimpleAtlas.MOD_ID, "textures/gui/icons/ocean_monument.png")),
+                new WaypointIconOption("Woodland Mansion", Identifier.fromNamespaceAndPath(SimpleAtlas.MOD_ID, "textures/gui/icons/woodland_mansion.png")),
+                new WaypointIconOption("Trial Chambers", Identifier.fromNamespaceAndPath(SimpleAtlas.MOD_ID, "textures/gui/icons/trial_chambers.png"))
+        );
+    }
+
+    private static class WaypointDraft {
+        final double worldX;
+        final double worldZ;
+        String name;
+        int iconIndex;
+
+        WaypointDraft(double worldX, double worldZ, String name, int iconIndex) {
+            this.worldX = worldX;
+            this.worldZ = worldZ;
+            this.name = name;
+            this.iconIndex = iconIndex;
+        }
+    }
+
+    private record WorldPoint(double x, double z) {}
+
+    public AtlasScreen(List<AtlasTilePayload> tiles, AtlasWaypointStore.WaypointState waypointState) {
         super(Component.literal("Atlas"));
         this.tiles = tiles;
+        this.waypointState = waypointState;
         this.atlasWidth = tiles.stream().mapToInt(AtlasTilePayload::tileX).max().orElse(0) + 1;
         this.atlasHeight = tiles.stream().mapToInt(AtlasTilePayload::tileY).max().orElse(0) + 1;
         this.playerIcon = new PlayerAtlasIcon(
@@ -70,22 +112,20 @@ public class AtlasScreen extends Screen {
                 PLAYER_MARKER_RENDER_SIZE,
                 PLAYER_MARKER_RENDER_SIZE
         );
+        this.atlasIcons = new ArrayList<>();
+        this.atlasIcons.add(this.playerIcon);
+        this.waypointIconOptions = createWaypointIconOptions();
+        this.selectedWaypointIconIndex = waypointState.selectedWaypointIconIndex;
+        this.nextWaypointNumber = waypointState.nextWaypointNumber;
 
-        AtlasTilePayload anchorTile = tiles.isEmpty() ? null : tiles.getFirst();
-        double waypointX = anchorTile != null ? anchorTile.centerX() : 0.0;
-        double waypointZ = anchorTile != null ? anchorTile.centerZ() : 0.0;
-
-        AtlasIcon waypointIcon = new RedSquareAtlasIcon(
-                PLAYER_MARKER_TEXTURE,
-                WAYPOINT_MARKER_SIZE,
-                WAYPOINT_MARKER_SIZE,
-                waypointX,
-                waypointZ,
-                WAYPOINT_MARKER_TITLE,
-                WAYPOINT_MARKER_COLOR
-        );
-
-        this.atlasIcons = List.of(this.playerIcon, waypointIcon);
+        for (AtlasWaypointStore.WaypointData waypoint : waypointState.waypoints) {
+            atlasIcons.add(createWaypointIcon(
+                    waypoint.worldX(),
+                    waypoint.worldZ(),
+                    Component.literal(waypoint.name()),
+                    waypoint.iconIndex()
+            ));
+        }
     }
 
     @Override
@@ -149,6 +189,71 @@ public class AtlasScreen extends Screen {
 
         this.panX = viewport.contentX() + viewport.contentWidth() / 2.0 - anchor.screenX();
         this.panY = viewport.contentY() + viewport.contentHeight() / 2.0 - anchor.screenY();
+    }
+
+    private AtlasIcon createWaypointIcon(double worldX, double worldZ, Component title, int iconIndex) {
+        WaypointIconOption option = waypointIconOptions.get(iconIndex);
+        return new StaticAtlasIcon(
+                option.texture(),
+                WAYPOINT_TEXTURE_SIZE,
+                WAYPOINT_TEXTURE_SIZE,
+                WAYPOINT_RENDER_SIZE,
+                WAYPOINT_RENDER_SIZE,
+                worldX,
+                worldZ,
+                title
+        );
+    }
+
+    private Integer getAtlasScaleFactor() {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.level == null || tiles.isEmpty()) {
+            return null;
+        }
+
+        MapItemSavedData firstData = minecraft.level.getMapData(new MapId(tiles.getFirst().mapId()));
+        return firstData != null ? (1 << firstData.scale) : null;
+    }
+
+    private WorldPoint screenToWorldPoint(double mouseX, double mouseY, float mapOriginX, float mapOriginY, float scaledTileSize) {
+        Integer scaleFactor = getAtlasScaleFactor();
+        if (scaleFactor == null) {
+            return null;
+        }
+
+        for (AtlasTilePayload tile : tiles) {
+            float tileScreenX = mapOriginX + tile.tileX() * scaledTileSize;
+            float tileScreenY = mapOriginY + tile.tileY() * scaledTileSize;
+
+            if (mouseX < tileScreenX || mouseX >= tileScreenX + scaledTileSize || mouseY < tileScreenY || mouseY >= tileScreenY + scaledTileSize) {
+                continue;
+            }
+
+            double localPixelX = (mouseX - tileScreenX) / (scaledTileSize / 128.0f);
+            double localPixelY = (mouseY - tileScreenY) / (scaledTileSize / 128.0f);
+
+            double tileWorldMinX = tile.centerX() - 64.0 * scaleFactor;
+            double tileWorldMinZ = tile.centerZ() - 64.0 * scaleFactor;
+
+            double worldX = tileWorldMinX + localPixelX * scaleFactor;
+            double worldZ = tileWorldMinZ + localPixelY * scaleFactor;
+            return new WorldPoint(worldX, worldZ);
+        }
+
+        return null;
+    }
+
+    private void cycleSelectedWaypointIcon(int step) {
+        if (waypointIconOptions.isEmpty()) {
+            return;
+        }
+
+        int size = waypointIconOptions.size();
+        selectedWaypointIconIndex = Math.floorMod(selectedWaypointIconIndex + step, size);
+        waypointState.selectedWaypointIconIndex = selectedWaypointIconIndex;
+        if (waypointDraft != null) {
+            waypointDraft.iconIndex = selectedWaypointIconIndex;
+        }
     }
 
     private void renderMapTile(GuiGraphicsExtractor graphics, int mapId, float x, float y, float scale) {
@@ -246,6 +351,21 @@ public class AtlasScreen extends Screen {
         graphics.textWithBackdrop(this.font, hoveredIcon.title(), textX, textY, textWidth, 0xFFFFFFFF);
     }
 
+    private void renderWaypointDraftOverlay(GuiGraphicsExtractor graphics, AtlasViewport viewport) {
+        if (waypointDraft == null || waypointIconOptions.isEmpty()) {
+            return;
+        }
+
+        WaypointIconOption option = waypointIconOptions.get(waypointDraft.iconIndex);
+        String prompt = "Naming waypoint: " + waypointDraft.name + "_";
+        String help = "Enter=Save  Esc=Cancel  [/]=Icon  Current=" + option.name();
+
+        int titleX = (int) Math.floor(viewport.contentX()) + 8;
+        int titleY = (int) Math.floor(viewport.contentY()) + 8;
+        graphics.textWithBackdrop(this.font, Component.literal(prompt), titleX, titleY, this.font.width(prompt), 0xFFFFFFFF);
+        graphics.textWithBackdrop(this.font, Component.literal(help), titleX, titleY + this.font.lineHeight + 2, this.font.width(help), 0xFFE0E0E0);
+    }
+
     @Override
     public void extractRenderState(@NonNull GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
         super.extractRenderState(graphics, mouseX, mouseY, delta);
@@ -258,7 +378,7 @@ public class AtlasScreen extends Screen {
         float originY = getMapOriginY(viewport, scaledTileSize);
         float mapOriginX = (float) (originX + panX);
         float mapOriginY = (float) (originY + panY);
-        HoveredAtlasIcon hoveredIcon = null;
+        HoveredAtlasIcon hoveredIcon;
 
         renderAtlasBackground(graphics, viewport);
 
@@ -297,15 +417,42 @@ public class AtlasScreen extends Screen {
             atlasIcon.render(graphics, minecraft, tiles, mapOriginX, mapOriginY, scaledTileSize);
         }
 
+        if (waypointDraft != null && !waypointIconOptions.isEmpty()) {
+            Component draftTitle = Component.literal(waypointDraft.name.isBlank() ? "Waypoint" : waypointDraft.name);
+            AtlasIcon draftIcon = createWaypointIcon(waypointDraft.worldX, waypointDraft.worldZ, draftTitle, waypointDraft.iconIndex);
+            draftIcon.render(graphics, minecraft, tiles, mapOriginX, mapOriginY, scaledTileSize);
+        }
+
         hoveredIcon = findHoveredIcon(minecraft, mapOriginX, mapOriginY, scaledTileSize, mouseX, mouseY);
         if (hoveredIcon != null) {
             renderHoveredIconTitle(graphics, viewport, hoveredIcon);
         }
 
+        renderWaypointDraftOverlay(graphics, viewport);
+
         graphics.disableScissor();
     }
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        if (event.button() == 0) {
+            AtlasViewport viewport = getAtlasViewport();
+            if (event.x() >= viewport.contentX() && event.x() <= viewport.contentX() + viewport.contentWidth()
+                    && event.y() >= viewport.contentY() && event.y() <= viewport.contentY() + viewport.contentHeight()) {
+                float scaledTileSize = TILE_SIZE * zoom;
+                float originX = getMapOriginX(viewport, scaledTileSize);
+                float originY = getMapOriginY(viewport, scaledTileSize);
+                float mapOriginX = (float) (originX + panX);
+                float mapOriginY = (float) (originY + panY);
+
+                WorldPoint worldPoint = screenToWorldPoint(event.x(), event.y(), mapOriginX, mapOriginY, scaledTileSize);
+                if (worldPoint != null && !waypointIconOptions.isEmpty()) {
+                    String defaultName = "Waypoint " + nextWaypointNumber;
+                    this.waypointDraft = new WaypointDraft(worldPoint.x(), worldPoint.z(), defaultName, selectedWaypointIconIndex);
+                    return true;
+                }
+            }
+        }
+
         if (event.button() == 1) {
             rightDragging = true;
             return true;
@@ -375,7 +522,52 @@ public class AtlasScreen extends Screen {
     }
 
     @Override
-    public boolean keyPressed(KeyEvent event) {
+    public boolean keyPressed(@NonNull KeyEvent event) {
+        if (waypointDraft != null) {
+            if (event.key() == GLFW.GLFW_KEY_ESCAPE) {
+                waypointDraft = null;
+                return true;
+            }
+
+            if (event.key() == GLFW.GLFW_KEY_ENTER || event.key() == GLFW.GLFW_KEY_KP_ENTER) {
+                String name = waypointDraft.name.trim();
+                if (name.isEmpty()) {
+                    name = "Waypoint " + nextWaypointNumber;
+                }
+
+                atlasIcons.add(createWaypointIcon(waypointDraft.worldX, waypointDraft.worldZ, Component.literal(name), waypointDraft.iconIndex));
+                waypointState.waypoints.add(new AtlasWaypointStore.WaypointData(
+                        waypointDraft.worldX,
+                        waypointDraft.worldZ,
+                        name,
+                        waypointDraft.iconIndex
+                ));
+                nextWaypointNumber++;
+                waypointState.nextWaypointNumber = nextWaypointNumber;
+                selectedWaypointIconIndex = waypointDraft.iconIndex;
+                waypointState.selectedWaypointIconIndex = selectedWaypointIconIndex;
+                waypointDraft = null;
+                return true;
+            }
+
+            if (event.key() == GLFW.GLFW_KEY_BACKSPACE) {
+                if (!waypointDraft.name.isEmpty()) {
+                    waypointDraft.name = waypointDraft.name.substring(0, waypointDraft.name.length() - 1);
+                }
+                return true;
+            }
+
+            if (event.key() == GLFW.GLFW_KEY_LEFT_BRACKET || event.key() == GLFW.GLFW_KEY_COMMA) {
+                cycleSelectedWaypointIcon(-1);
+                return true;
+            }
+
+            if (event.key() == GLFW.GLFW_KEY_RIGHT_BRACKET || event.key() == GLFW.GLFW_KEY_PERIOD || event.key() == GLFW.GLFW_KEY_TAB) {
+                cycleSelectedWaypointIcon(1);
+                return true;
+            }
+        }
+
         if (event.key() == GLFW.GLFW_KEY_R) {
             this.zoom = 1.0f;
             centerOnPlayerPosition();
@@ -389,6 +581,24 @@ public class AtlasScreen extends Screen {
     public void onClose() {
         ClientPlayNetworking.send(new CloseAtlasViewPayload());
         super.onClose();
+    }
+
+    @Override
+    public boolean charTyped(@NonNull CharacterEvent event) {
+        if (waypointDraft != null) {
+            if (!event.isAllowedChatCharacter()) {
+                return false;
+            }
+
+            if (waypointDraft.name.length() >= WAYPOINT_NAME_MAX_LENGTH) {
+                return true;
+            }
+
+            waypointDraft.name = waypointDraft.name + event.codepointAsString();
+            return true;
+        }
+
+        return super.charTyped(event);
     }
 
     @Override
