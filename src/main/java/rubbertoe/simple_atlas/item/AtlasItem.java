@@ -107,7 +107,11 @@ public class AtlasItem extends Item {
                                     entry.tileX(),
                                     entry.tileY()
                             ))
-                            .toList()
+                            .toList(),
+                    contents.mapIds(),
+                    contents.waypoints(),
+                    contents.selectedWaypointIconIndex(),
+                    contents.nextWaypointNumber()
             );
             for (int rawId : contents.mapIds()) {
                 MapId mapId = new MapId(rawId);

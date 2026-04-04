@@ -1,9 +1,9 @@
 package rubbertoe.simple_atlas.network;
 
+import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.resources.Identifier;
 import org.jspecify.annotations.NonNull;
 import rubbertoe.simple_atlas.SimpleAtlas;
@@ -12,26 +12,14 @@ import rubbertoe.simple_atlas.component.AtlasContents;
 import java.util.ArrayList;
 import java.util.List;
 
-public record OpenAtlasScreenPayload(
-        List<AtlasTilePayload> tiles,
+public record SaveAtlasWaypointsPayload(
         List<Integer> atlasMapIds,
         List<AtlasContents.WaypointData> waypoints,
         int selectedWaypointIconIndex,
         int nextWaypointNumber
 ) implements CustomPacketPayload {
-
-    public static final Identifier ID = Identifier.fromNamespaceAndPath(SimpleAtlas.MOD_ID, "open_atlas_screen");
-    public static final Type<OpenAtlasScreenPayload> TYPE = new Type<>(ID);
-
-    public static final StreamCodec<RegistryFriendlyByteBuf, AtlasTilePayload> TILE_CODEC =
-            StreamCodec.composite(
-                    ByteBufCodecs.INT, AtlasTilePayload::mapId,
-                    ByteBufCodecs.INT, AtlasTilePayload::centerX,
-                    ByteBufCodecs.INT, AtlasTilePayload::centerZ,
-                    ByteBufCodecs.INT, AtlasTilePayload::tileX,
-                    ByteBufCodecs.INT, AtlasTilePayload::tileY,
-                    AtlasTilePayload::new
-            );
+    public static final Type<SaveAtlasWaypointsPayload> TYPE =
+            new Type<>(Identifier.fromNamespaceAndPath(SimpleAtlas.MOD_ID, "save_atlas_waypoints"));
 
     public static final StreamCodec<RegistryFriendlyByteBuf, AtlasContents.WaypointData> WAYPOINT_CODEC =
             StreamCodec.composite(
@@ -46,19 +34,17 @@ public record OpenAtlasScreenPayload(
                     AtlasContents.WaypointData::new
             );
 
-    public static final StreamCodec<RegistryFriendlyByteBuf, OpenAtlasScreenPayload> CODEC =
+    public static final StreamCodec<RegistryFriendlyByteBuf, SaveAtlasWaypointsPayload> CODEC =
             StreamCodec.composite(
-                    ByteBufCodecs.collection(ArrayList::new, TILE_CODEC),
-                    p -> new ArrayList<>(p.tiles()),
                     ByteBufCodecs.collection(ArrayList::new, ByteBufCodecs.INT),
                     p -> new ArrayList<>(p.atlasMapIds()),
                     ByteBufCodecs.collection(ArrayList::new, WAYPOINT_CODEC),
                     p -> new ArrayList<>(p.waypoints()),
                     ByteBufCodecs.INT,
-                    OpenAtlasScreenPayload::selectedWaypointIconIndex,
+                    SaveAtlasWaypointsPayload::selectedWaypointIconIndex,
                     ByteBufCodecs.INT,
-                    OpenAtlasScreenPayload::nextWaypointNumber,
-                    OpenAtlasScreenPayload::new
+                    SaveAtlasWaypointsPayload::nextWaypointNumber,
+                    SaveAtlasWaypointsPayload::new
             );
 
     @Override

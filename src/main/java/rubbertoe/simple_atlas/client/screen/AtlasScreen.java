@@ -17,12 +17,14 @@ import net.minecraft.world.level.saveddata.maps.MapItemSavedData;
 import org.jspecify.annotations.NonNull;
 import org.lwjgl.glfw.GLFW;
 import rubbertoe.simple_atlas.SimpleAtlas;
+import rubbertoe.simple_atlas.component.AtlasContents;
 import rubbertoe.simple_atlas.client.screen.icon.AtlasIcon;
 import rubbertoe.simple_atlas.client.screen.icon.PlayerAtlasIcon;
 import rubbertoe.simple_atlas.client.screen.icon.StaticAtlasIcon;
-import rubbertoe.simple_atlas.client.waypoint.AtlasWaypointStore;
 import rubbertoe.simple_atlas.network.AtlasTilePayload;
 import rubbertoe.simple_atlas.network.CloseAtlasViewPayload;
+import rubbertoe.simple_atlas.network.OpenAtlasScreenPayload;
+import rubbertoe.simple_atlas.network.SaveAtlasWaypointsPayload;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -51,12 +53,13 @@ public class AtlasScreen extends Screen {
     private final int atlasWidth;
     private final int atlasHeight;
     private final List<AtlasTilePayload> tiles;
+    private final List<Integer> atlasMapIds;
     private final PlayerAtlasIcon playerIcon;
     private final List<AtlasIcon> atlasIcons;
+    private final List<AtlasContents.WaypointData> atlasWaypoints;
     private final List<WaypointIconOption> waypointIconOptions;
-    private final AtlasWaypointStore.WaypointState waypointState;
-    private int selectedWaypointIconIndex = 0;
-    private int nextWaypointNumber = 1;
+    private int selectedWaypointIconIndex;
+    private int nextWaypointNumber;
     private WaypointDraft waypointDraft;
     private double panX = 0;
     private double panY = 0;
@@ -99,10 +102,27 @@ public class AtlasScreen extends Screen {
 
     private record WorldPoint(double x, double z) {}
 
-    public AtlasScreen(List<AtlasTilePayload> tiles, AtlasWaypointStore.WaypointState waypointState) {
+    public static AtlasScreen fromPayload(OpenAtlasScreenPayload payload) {
+        return new AtlasScreen(
+                payload.tiles(),
+                payload.atlasMapIds(),
+                payload.waypoints(),
+                payload.selectedWaypointIconIndex(),
+                payload.nextWaypointNumber()
+        );
+    }
+
+    public AtlasScreen(
+            List<AtlasTilePayload> tiles,
+            List<Integer> atlasMapIds,
+            List<AtlasContents.WaypointData> waypoints,
+            int selectedWaypointIconIndex,
+            int nextWaypointNumber
+    ) {
         super(Component.literal("Atlas"));
         this.tiles = tiles;
-        this.waypointState = waypointState;
+        this.atlasMapIds = List.copyOf(atlasMapIds);
+        this.atlasWaypoints = new ArrayList<>(waypoints);
         this.atlasWidth = tiles.stream().mapToInt(AtlasTilePayload::tileX).max().orElse(0) + 1;
         this.atlasHeight = tiles.stream().mapToInt(AtlasTilePayload::tileY).max().orElse(0) + 1;
         this.playerIcon = new PlayerAtlasIcon(
@@ -115,10 +135,12 @@ public class AtlasScreen extends Screen {
         this.atlasIcons = new ArrayList<>();
         this.atlasIcons.add(this.playerIcon);
         this.waypointIconOptions = createWaypointIconOptions();
-        this.selectedWaypointIconIndex = waypointState.selectedWaypointIconIndex;
-        this.nextWaypointNumber = waypointState.nextWaypointNumber;
+        this.selectedWaypointIconIndex = this.waypointIconOptions.isEmpty()
+                ? 0
+                : Math.floorMod(selectedWaypointIconIndex, this.waypointIconOptions.size());
+        this.nextWaypointNumber = Math.max(1, nextWaypointNumber);
 
-        for (AtlasWaypointStore.WaypointData waypoint : waypointState.waypoints) {
+        for (AtlasContents.WaypointData waypoint : this.atlasWaypoints) {
             atlasIcons.add(createWaypointIcon(
                     waypoint.worldX(),
                     waypoint.worldZ(),
@@ -192,7 +214,8 @@ public class AtlasScreen extends Screen {
     }
 
     private AtlasIcon createWaypointIcon(double worldX, double worldZ, Component title, int iconIndex) {
-        WaypointIconOption option = waypointIconOptions.get(iconIndex);
+        int resolvedIconIndex = waypointIconOptions.isEmpty() ? 0 : Math.floorMod(iconIndex, waypointIconOptions.size());
+        WaypointIconOption option = waypointIconOptions.get(resolvedIconIndex);
         return new StaticAtlasIcon(
                 option.texture(),
                 WAYPOINT_TEXTURE_SIZE,
@@ -250,10 +273,18 @@ public class AtlasScreen extends Screen {
 
         int size = waypointIconOptions.size();
         selectedWaypointIconIndex = Math.floorMod(selectedWaypointIconIndex + step, size);
-        waypointState.selectedWaypointIconIndex = selectedWaypointIconIndex;
         if (waypointDraft != null) {
             waypointDraft.iconIndex = selectedWaypointIconIndex;
         }
+    }
+
+    private void persistWaypointState() {
+        ClientPlayNetworking.send(new SaveAtlasWaypointsPayload(
+                atlasMapIds,
+                atlasWaypoints,
+                selectedWaypointIconIndex,
+                nextWaypointNumber
+        ));
     }
 
     private void renderMapTile(GuiGraphicsExtractor graphics, int mapId, float x, float y, float scale) {
@@ -536,17 +567,16 @@ public class AtlasScreen extends Screen {
                 }
 
                 atlasIcons.add(createWaypointIcon(waypointDraft.worldX, waypointDraft.worldZ, Component.literal(name), waypointDraft.iconIndex));
-                waypointState.waypoints.add(new AtlasWaypointStore.WaypointData(
+                atlasWaypoints.add(new AtlasContents.WaypointData(
                         waypointDraft.worldX,
                         waypointDraft.worldZ,
                         name,
                         waypointDraft.iconIndex
                 ));
                 nextWaypointNumber++;
-                waypointState.nextWaypointNumber = nextWaypointNumber;
                 selectedWaypointIconIndex = waypointDraft.iconIndex;
-                waypointState.selectedWaypointIconIndex = selectedWaypointIconIndex;
                 waypointDraft = null;
+                persistWaypointState();
                 return true;
             }
 
@@ -579,6 +609,7 @@ public class AtlasScreen extends Screen {
 
     @Override
     public void onClose() {
+        persistWaypointState();
         ClientPlayNetworking.send(new CloseAtlasViewPayload());
         super.onClose();
     }
