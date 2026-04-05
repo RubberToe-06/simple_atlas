@@ -51,10 +51,6 @@ public abstract class AtlasIcon {
         return isVisible(minecraft) ? getHoverTitle(minecraft) : null;
     }
 
-    public final int renderWidth() {
-        return renderWidth;
-    }
-
     public final int renderHeight() {
         return renderHeight;
     }

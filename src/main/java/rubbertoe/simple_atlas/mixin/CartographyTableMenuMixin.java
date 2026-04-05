@@ -8,12 +8,12 @@ import net.minecraft.world.inventory.ResultContainer;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import net.minecraft.world.item.MapItem;
 import net.minecraft.world.level.saveddata.maps.MapId;
 import net.minecraft.world.level.saveddata.maps.MapItemSavedData;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -35,18 +35,13 @@ public abstract class CartographyTableMenuMixin {
             ItemStack resultStack,
             CallbackInfo ci
     ) {
-        if (!mapStack.is(Items.FILLED_MAP)) {
-            return;
-        }
-
-        if (!additionalStack.is(ModItems.ATLAS)) {
+        if (!mapStack.is(Items.FILLED_MAP) || !additionalStack.is(ModItems.ATLAS)) {
             return;
         }
 
         MapId mapId = mapStack.get(DataComponents.MAP_ID);
         if (mapId == null) {
-            this.resultContainer.removeItemNoUpdate(2);
-            ((CartographyTableMenu) (Object) this).broadcastChanges();
+            simple_atlas$rejectAtlasResult();
             ci.cancel();
             return;
         }
@@ -56,31 +51,26 @@ public abstract class CartographyTableMenuMixin {
                 AtlasContents.EMPTY
         );
 
+        // Duplicate map IDs are rejected so atlas contents stay unique.
         if (contents.contains(mapId.id())) {
-            this.resultContainer.removeItemNoUpdate(2);
-            ((CartographyTableMenu) (Object) this).broadcastChanges();
+            simple_atlas$rejectAtlasResult();
             ci.cancel();
             return;
         }
 
         this.access.execute((level, _) -> {
-            MapItemSavedData newMapData = MapItem.getSavedData(mapStack, level);
+            MapItemSavedData newMapData = level.getMapData(mapId);
             if (newMapData == null) {
-                this.resultContainer.removeItemNoUpdate(2);
-                ((CartographyTableMenu) (Object) this).broadcastChanges();
+                simple_atlas$rejectAtlasResult();
                 return;
             }
 
             if (!contents.mapIds().isEmpty()) {
                 int originRawId = contents.mapIds().getFirst();
+                MapItemSavedData originMapData = level.getMapData(new MapId(originRawId));
 
-                ItemStack originMapStack = new ItemStack(Items.FILLED_MAP);
-                originMapStack.set(DataComponents.MAP_ID, new MapId(originRawId));
-
-                MapItemSavedData originMapData = MapItem.getSavedData(originMapStack, level);
                 if (originMapData == null || originMapData.scale != newMapData.scale) {
-                    this.resultContainer.removeItemNoUpdate(2);
-                    ((CartographyTableMenu) (Object) this).broadcastChanges();
+                    simple_atlas$rejectAtlasResult();
                     return;
                 }
             }
@@ -98,6 +88,13 @@ public abstract class CartographyTableMenuMixin {
 
         ci.cancel();
     }
+
+    @Unique
+    private void simple_atlas$rejectAtlasResult() {
+        this.resultContainer.removeItemNoUpdate(2);
+        ((CartographyTableMenu) (Object) this).broadcastChanges();
+    }
+
     @Inject(method = "quickMoveStack", at = @At("HEAD"), cancellable = true)
     private void simple_atlas$quickMoveAtlas(
             Player player,
@@ -136,3 +133,4 @@ public abstract class CartographyTableMenuMixin {
         }
     }
 }
+

@@ -709,16 +709,32 @@ public class AtlasScreen extends Screen {
             HoveredAtlasIcon hoveredIcon
     ) {
         int textWidth = this.font.width(hoveredIcon.title());
+        int boxPaddingX = 6;
+        int boxPaddingY = 3;
+        int boxWidth = textWidth + boxPaddingX * 2;
+        int boxHeight = this.font.lineHeight + boxPaddingY * 2;
+
         int minX = (int) Math.floor(viewport.contentX()) + 2;
-        int maxX = (int) Math.ceil(viewport.contentX() + viewport.contentWidth()) - textWidth - 2;
-        int centeredX = Mth.floor(hoveredIcon.anchor().screenX() - textWidth / 2.0f);
-        int textX = maxX >= minX ? Mth.clamp(centeredX, minX, maxX) : centeredX;
+        int maxX = (int) Math.ceil(viewport.contentX() + viewport.contentWidth()) - boxWidth - 2;
+        int centeredX = Mth.floor(hoveredIcon.anchor().screenX() - boxWidth / 2.0f);
+        int boxX = maxX >= minX ? Mth.clamp(centeredX, minX, maxX) : centeredX;
 
         int minY = (int) Math.floor(viewport.contentY()) + 2;
-        int maxY = (int) Math.ceil(viewport.contentY() + viewport.contentHeight()) - this.font.lineHeight - 2;
+        int maxY = (int) Math.ceil(viewport.contentY() + viewport.contentHeight()) - boxHeight - 2;
         int preferredY = Mth.floor(hoveredIcon.anchor().screenY() + hoveredIcon.icon().renderHeight() / 2.0f + ICON_HOVER_TITLE_PADDING);
-        int textY = maxY >= minY ? Mth.clamp(preferredY, minY, maxY) : preferredY;
+        int boxY = maxY >= minY ? Mth.clamp(preferredY, minY, maxY) : preferredY;
 
+        int boxX2 = boxX + boxWidth;
+        int boxY2 = boxY + boxHeight;
+
+        graphics.fill(boxX, boxY, boxX2, boxY2, 0xE0101010);
+        graphics.fill(boxX, boxY, boxX2, boxY + 1, 0xFF707070);
+        graphics.fill(boxX, boxY2 - 1, boxX2, boxY2, 0xFF707070);
+        graphics.fill(boxX, boxY, boxX + 1, boxY2, 0xFF707070);
+        graphics.fill(boxX2 - 1, boxY, boxX2, boxY2, 0xFF707070);
+
+        int textX = boxX + boxPaddingX;
+        int textY = boxY + boxPaddingY;
         graphics.textWithBackdrop(this.font, hoveredIcon.title(), textX, textY, textWidth, 0xFFFFFFFF);
     }
 
@@ -754,7 +770,6 @@ public class AtlasScreen extends Screen {
 
         String title = option.name() + "  (" + (waypointDraft.iconIndex + 1) + "/" + waypointIconOptions.size() + ")";
         String namePrompt = "Name: " + waypointDraft.name + "_";
-        String help = "LMB icon/arrow=Pick  Enter=Save  Esc=Cancel";
 
         int textX = previewX + WAYPOINT_PICKER_PREVIEW_SIZE + 6;
         graphics.textWithBackdrop(this.font, Component.literal(title), textX, previewY + 2, this.font.width(title), 0xFFFFFFFF);
@@ -788,16 +803,13 @@ public class AtlasScreen extends Screen {
         graphics.fill(layout.rightArrowX(), layout.arrowY(), layout.rightArrowX() + WAYPOINT_PICKER_ARROW_SIZE, arrowY2, 0x70000000);
         graphics.textWithBackdrop(this.font, Component.literal("<"), layout.leftArrowX() + 3, layout.arrowY() + 2, this.font.width("<"), 0xFFFFFFFF);
         graphics.textWithBackdrop(this.font, Component.literal(">"), layout.rightArrowX() + 3, layout.arrowY() + 2, this.font.width(">"), 0xFFFFFFFF);
-
-        int helpY = layout.panelY2() - this.font.lineHeight - 5;
-        graphics.textWithBackdrop(this.font, Component.literal(help), layout.panelX() + 6, helpY, this.font.width(help), 0xFFE0E0E0);
     }
 
     private WaypointPickerLayout getWaypointPickerLayout(AtlasViewport viewport) {
         int panelX = (int) Math.floor(viewport.contentX()) + WAYPOINT_PICKER_PADDING;
         int panelY = (int) Math.floor(viewport.contentY()) + WAYPOINT_PICKER_PADDING;
         int panelWidth = (int) Math.floor(viewport.contentWidth()) - WAYPOINT_PICKER_PADDING * 2;
-        int panelHeight = WAYPOINT_PICKER_PREVIEW_SIZE + WAYPOINT_PICKER_STRIP_ICON_SIZE + this.font.lineHeight * 2 + 20;
+        int panelHeight = WAYPOINT_PICKER_PREVIEW_SIZE + WAYPOINT_PICKER_STRIP_ICON_SIZE + this.font.lineHeight + 18;
         int panelX2 = panelX + panelWidth;
         int panelY2 = panelY + panelHeight;
 
@@ -1186,3 +1198,10 @@ public class AtlasScreen extends Screen {
         return false;
     }
 }
+
+
+
+
+
+
+

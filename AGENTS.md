@@ -8,6 +8,7 @@
 ## Architecture You Should Learn First
 - Server bootstrap: `SimpleAtlas.onInitialize()` wires modules in order: `ModItems`, `ModComponents`, `ModNetworking`, `AtlasViewTicker`.
 - Item state is stored in a custom data component: `ModComponents.ATLAS_CONTENTS` with codec in `component/AtlasContents.java`.
+- `AtlasContents` now stores both atlas map IDs and waypoint state (`waypoints`, `selectedWaypointIconIndex`, `nextWaypointNumber`), and sanitizes waypoint names/icon indices.
 - Core gameplay logic lives in `item/AtlasItem.java`:
   - Main-hand use + filled map in offhand -> validate scale, dedupe, append map ID to atlas component.
   - Main-hand use without map (atlas has maps) -> call `AtlasLayoutBuilder.build()`, serialize result as `List<AtlasTilePayload>`, register player with `AtlasViewManager`, send `OpenAtlasScreenPayload` to client.
@@ -15,12 +16,16 @@
 - Cartography integration is mixin-driven (`mixin/CartographyTableMenuMixin.java`, `CartographyTableAdditionalSlotMixin.java`) rather than vanilla recipe-only behavior. `CartographyTableMenuMixin` also intercepts `quickMoveStack` (shift-click) to route atlas items into slot 1. `mixin/AbstractContainerMenuInvoker.java` exposes `moveItemStackTo` and `broadcastChanges` as `@Invoker` helpers.
 - Live map sync is server-managed: `server/AtlasViewManager` tracks active viewers; `AtlasViewTicker` pushes map packets every 10 ticks and registers `ServerPlayConnectionEvents.DISCONNECT` to auto-remove players on disconnect.
 - Client UI is `client/screen/AtlasScreen.java` (zoom 0.25–4.0 via scroll, right-drag pan, `R` key resets zoom+pan to player position, hover tile overlay, player marker via `textures/gui/player_marker.png`, close packet on exit). Rendering uses `extractRenderState()` (MC 26.1 API), not `render()`.
+- `AtlasScreen` also manages waypoint UX (right-click context menu, create/edit/delete, icon picker strip, name entry, waypoint hover titles) and can send navigation requests that equip a temporary waypoint compass in offhand.
+- Navigation compass behavior is centralized in `navigation/NavigationCompassUtil.java`; server receivers tag compasses with custom-data owner keys and `mixin/ItemEntityMixin.java` blocks duplicate owned compass pickup.
 
 ## Networking/Data Flow
 - Payload types and codecs are in `network/*Payload.java`; registration is centralized in `network/ModNetworking.java`.
 - `AtlasTilePayload` is a plain record (mapId, centerX, centerZ, tileX, tileY); its stream codec (`TILE_CODEC`) is defined inside `OpenAtlasScreenPayload` and is **not** registered independently.
 - Open flow: `AtlasItem` (server) -> `OpenAtlasScreenPayload` (carries `List<AtlasTilePayload>`) -> `SimpleAtlasClient` receiver -> `AtlasScreen`.
 - Close flow: `AtlasScreen.onClose()` sends `CloseAtlasViewPayload` -> server receiver removes player from `AtlasViewManager`.
+- Waypoint persistence flow: `AtlasScreen.persistWaypointState()` -> `SaveAtlasWaypointsPayload` (includes `atlasMapIds` echo) -> server validates current atlas identity, sanitizes waypoint list, writes updated `AtlasContents`.
+- Navigation flow: `AtlasScreen` context menu -> `NavigateToWaypointPayload` / `StopNavigatingPayload` -> server equips/removes owner-tagged lodestone compass and syncs offhand inventory slot.
 - If adding a payload, follow existing pattern: define `TYPE` + `CODEC`, register in `ModNetworking`, then wire receiver/sender.
 
 ## Developer Workflows (verified tasks)
@@ -40,14 +45,14 @@
 - Registry helper pattern: keep registration helpers in module-local classes (example: `item/ModItems.register(...)`).
 - Use `Identifier.fromNamespaceAndPath(SimpleAtlas.MOD_ID, ...)` for IDs; avoid hard-coded namespace strings.
 - Atlas map IDs preserve insertion order and dedupe (`AtlasContents.withAdded` uses `LinkedHashSet`).
+- Waypoint names are capped at 32 chars and icon indices are clamped/sanitized in `AtlasContents.WaypointData`; keep client and server limits aligned.
 - Treat `src/main/generated` as datagen output; change providers in `datagen/*Provider.java` instead of hand-editing generated JSON.
 - Mixin targets use `simple_atlas$` method prefixes for injected/invoker methods.
 - Keep side-specific logic separated: client receivers/screens under `client/*`; server state/ticking under `server/*`.
-- `debug/AtlasMapDebugEntry.java` has identical fields to `layout/AtlasMapEntry` and appears to be a leftover; prefer `AtlasMapEntry` for any new layout work.
 
 ## High-Risk Integration Points
 - `CartographyTableMenu` internals are version-sensitive; re-check mixins after Minecraft/Fabric updates.
 - Map sync depends on `MapItemSavedData#getUpdatePacket`; null checks are required before sending packets.
 - Atlas layout assumes uniform map scale; scale mismatch handling in `AtlasItem` and `CartographyTableMenuMixin` must stay consistent.
+- Navigation compass sync currently depends on explicit offhand slot updates (`Inventory` slot `40`) and custom-data ownership tags; re-check if inventory sync internals change.
 - `AtlasScreen.extractRenderState()` uses `GuiGraphicsExtractor` and `MapRenderState` — both are MC 26.1-specific rendering APIs; re-check if the renderer API changes on update.
-

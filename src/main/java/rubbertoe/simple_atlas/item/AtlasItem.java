@@ -2,7 +2,6 @@ package rubbertoe.simple_atlas.item;
 
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.ChatFormatting;
-import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.server.level.ServerLevel;
@@ -12,7 +11,6 @@ import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.item.component.TooltipDisplay;
 import net.minecraft.world.level.Level;
@@ -87,98 +85,50 @@ public class AtlasItem extends Item {
                 AtlasContents.EMPTY
         );
 
-        ItemStack offhandStack = player.getOffhandItem();
-        if (!offhandStack.is(Items.FILLED_MAP)) {
-            if (contents.mapIds().isEmpty()) {
-                player.sendSystemMessage(
-                        Component.literal("Your atlas has no maps, add maps using a cartography table")
-                                .withStyle(ChatFormatting.YELLOW)
-                );
-                return InteractionResult.SUCCESS;
-            }
-            AtlasLayout layout = AtlasLayoutBuilder.build(serverLevel, contents);
-
-            OpenAtlasScreenPayload payload = new OpenAtlasScreenPayload(
-                    layout.entries().stream()
-                            .map(entry -> new AtlasTilePayload(
-                                    entry.mapId(),
-                                    entry.centerX(),
-                                    entry.centerZ(),
-                                    entry.tileX(),
-                                    entry.tileY()
-                            ))
-                            .toList(),
-                    contents.mapIds(),
-                    contents.waypoints(),
-                    contents.selectedWaypointIconIndex(),
-                    contents.nextWaypointNumber()
-            );
-            for (int rawId : contents.mapIds()) {
-                MapId mapId = new MapId(rawId);
-                MapItemSavedData mapData = serverLevel.getMapData(mapId);
-
-                if (mapData == null) {
-                    continue;
-                }
-
-                mapData.getHoldingPlayer(player);
-                Packet<?> packet = mapData.getUpdatePacket(mapId, player);
-
-                if (packet != null) {
-                    ((ServerPlayer) player).connection.send(packet);
-                }
-            }
-            AtlasViewManager.startViewing((ServerPlayer) player, contents.mapIds());
-            ServerPlayNetworking.send((ServerPlayer) player, payload);
-
-            return InteractionResult.SUCCESS;
-        }
-
-        // Add map from offhand
-        MapId mapIdComponent = offhandStack.get(DataComponents.MAP_ID);
-        if (mapIdComponent == null) {
-            return InteractionResult.PASS;
-        }
-
-        int mapId = mapIdComponent.id();
-
-        // Scale validation — single pass, data fetched once and reused for the error message
-        if (!contents.mapIds().isEmpty()) {
-            MapItemSavedData newMapData = serverLevel.getMapData(mapIdComponent);
-            MapItemSavedData originMapData = serverLevel.getMapData(new MapId(contents.mapIds().getFirst()));
-
-            if (newMapData == null || originMapData == null) {
-                return InteractionResult.PASS;
-            }
-
-            if (newMapData.scale != originMapData.scale) {
-                player.sendSystemMessage(
-                        Component.literal(
-                                "Map scale mismatch. Atlas scale: " + originMapData.scale +
-                                        ", new map scale: " + newMapData.scale
-                        ).withStyle(ChatFormatting.RED)
-                );
-                return InteractionResult.SUCCESS;
-            }
-        }
-
-        // Duplicate check
-        if (contents.contains(mapId)) {
+        if (contents.mapIds().isEmpty()) {
             player.sendSystemMessage(
-                    Component.literal("Atlas already contains map #" + mapId)
+                    Component.literal("Your atlas has no maps, add maps using a cartography table")
                             .withStyle(ChatFormatting.YELLOW)
             );
             return InteractionResult.SUCCESS;
         }
 
-        // Add map
-        AtlasContents updated = contents.withAdded(mapId);
-        atlasStack.set(ModComponents.ATLAS_CONTENTS, updated);
+        AtlasLayout layout = AtlasLayoutBuilder.build(serverLevel, contents);
 
-        player.sendSystemMessage(
-                Component.literal("Added map #" + mapId + " to atlas (" + updated.size() + " total)")
-                        .withStyle(ChatFormatting.GREEN)
+        OpenAtlasScreenPayload payload = new OpenAtlasScreenPayload(
+                layout.entries().stream()
+                        .map(entry -> new AtlasTilePayload(
+                                entry.mapId(),
+                                entry.centerX(),
+                                entry.centerZ(),
+                                entry.tileX(),
+                                entry.tileY()
+                        ))
+                        .toList(),
+                contents.mapIds(),
+                contents.waypoints(),
+                contents.selectedWaypointIconIndex(),
+                contents.nextWaypointNumber()
         );
+
+        for (int rawId : contents.mapIds()) {
+            MapId mapId = new MapId(rawId);
+            MapItemSavedData mapData = serverLevel.getMapData(mapId);
+
+            if (mapData == null) {
+                continue;
+            }
+
+            mapData.getHoldingPlayer(player);
+            Packet<?> packet = mapData.getUpdatePacket(mapId, player);
+
+            if (packet != null) {
+                ((ServerPlayer) player).connection.send(packet);
+            }
+        }
+        AtlasViewManager.startViewing((ServerPlayer) player, contents.mapIds());
+        ServerPlayNetworking.send((ServerPlayer) player, payload);
+
 
         return InteractionResult.SUCCESS;
     }

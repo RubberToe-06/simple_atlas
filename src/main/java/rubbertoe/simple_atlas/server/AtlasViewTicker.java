@@ -5,6 +5,8 @@ import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.MapItem;
 import net.minecraft.world.level.saveddata.maps.MapId;
 import net.minecraft.world.level.saveddata.maps.MapItemSavedData;
 
@@ -35,21 +37,51 @@ public final class AtlasViewTicker {
                 continue;
             }
 
-            for (int rawId : entry.getValue()) {
-                MapId mapId = new MapId(rawId);
-                MapItemSavedData mapData = player.level().getMapData(mapId);
+            Integer currentMapRawId = findCurrentMapIdForPlayer(player, entry.getValue());
+            if (currentMapRawId == null) {
+                continue;
+            }
 
-                if (mapData == null) {
-                    continue;
-                }
+            MapId mapId = new MapId(currentMapRawId);
+            MapItemSavedData mapData = player.level().getMapData(mapId);
+            if (mapData == null) {
+                continue;
+            }
 
-                mapData.getHoldingPlayer(player);
-                Packet<?> packet = mapData.getUpdatePacket(mapId, player);
+            // Mirror vanilla map update behavior while atlas is open, but only for the map under the player.
+            if (!mapData.locked) {
+                ((MapItem) Items.FILLED_MAP).update(player.level(), player, mapData);
+            }
 
-                if (packet != null) {
-                    player.connection.send(packet);
-                }
+            mapData.getHoldingPlayer(player);
+            Packet<?> packet = mapData.getUpdatePacket(mapId, player);
+            if (packet != null) {
+                player.connection.send(packet);
             }
         }
+    }
+
+    private static Integer findCurrentMapIdForPlayer(ServerPlayer player, List<Integer> mapIds) {
+        double x = player.getX();
+        double z = player.getZ();
+
+        for (int rawId : mapIds) {
+            MapItemSavedData mapData = player.level().getMapData(new MapId(rawId));
+            if (mapData == null) {
+                continue;
+            }
+
+            int scaleFactor = 1 << mapData.scale;
+            double mapMinX = mapData.centerX - 64.0 * scaleFactor;
+            double mapMinZ = mapData.centerZ - 64.0 * scaleFactor;
+            double mapMaxX = mapData.centerX + 64.0 * scaleFactor;
+            double mapMaxZ = mapData.centerZ + 64.0 * scaleFactor;
+
+            if (x >= mapMinX && x < mapMaxX && z >= mapMinZ && z < mapMaxZ) {
+                return rawId;
+            }
+        }
+
+        return null;
     }
 }
