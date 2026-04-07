@@ -1,7 +1,8 @@
 # AGENTS.md
 
 ## Project Snapshot
-- Fabric mod (`simple-atlas`) for Minecraft `26.1`, Java `25`, Loom `1.15.x`.
+- Fabric mod (`simple-atlas`) for Minecraft `26.1` (year.update format: `26.1` = 2026 update 1), Java `25`, Loom `1.15.x`.
+- Minecraft versions now use a year.update scheme; treat version bumps as update-track changes within that yearly line.
 - Main package: `src/main/java/rubbertoe/simple_atlas`.
 - Entrypoints are declared in `src/main/resources/fabric.mod.json` (`main`, `client`, `fabric-datagen`).
 
@@ -36,14 +37,15 @@
 - Inspect available tasks: `./gradlew.bat tasks --all`.
 
 ## Agent Tooling
-- `minecraft-dev-mcp` tools are available in this environment; use them to inspect decompiled Minecraft `26.1` classes, method signatures, packets, registries, and mapping names before changing version-sensitive code.
+- `minecraft-dev-mcp` tools are available in this environment; use them to inspect decompiled Minecraft `26.1` classes, method signatures, packets, and registries before changing version-sensitive code.
 - Prefer checking vanilla call paths and APIs with those tools before editing `mixin/CartographyTableMenuMixin.java`, `client/screen/AtlasScreen.java`, map sync code, or other internals tied closely to Minecraft updates.
 - Useful targets to inspect first include `MapItemSavedData`, `CartographyTableMenu`, map packet classes, and rendering classes used by `AtlasScreen.extractRenderState()`.
-- If a behavior depends on Minecraft internals, verify the exact `26.1` implementation with `minecraft-dev-mcp` rather than assuming older Yarn/Fabric examples still apply.
+- If a behavior depends on Minecraft internals, verify the exact `26.1` implementation with `minecraft-dev-mcp` rather than assuming older mapping-era Fabric examples still apply.
 
 ## Project-Specific Conventions
 - Registry helper pattern: keep registration helpers in module-local classes (example: `item/ModItems.register(...)`).
 - Use `Identifier.fromNamespaceAndPath(SimpleAtlas.MOD_ID, ...)` for IDs; avoid hard-coded namespace strings.
+- Minecraft source for current versions is unobfuscated; use official Minecraft names directly (no Yarn remapping layer needed).
 - Atlas map IDs preserve insertion order and dedupe (`AtlasContents.withAdded` uses `LinkedHashSet`).
 - Waypoint names are capped at 32 chars and icon indices are clamped/sanitized in `AtlasContents.WaypointData`; keep client and server limits aligned.
 - Treat `src/main/generated` as datagen output; change providers in `datagen/*Provider.java` instead of hand-editing generated JSON.
@@ -55,4 +57,4 @@
 - Map sync depends on `MapItemSavedData#getUpdatePacket`; null checks are required before sending packets.
 - Atlas layout assumes uniform map scale; scale mismatch handling in `AtlasItem` and `CartographyTableMenuMixin` must stay consistent.
 - Navigation compass sync currently depends on explicit offhand slot updates (`Inventory` slot `40`) and custom-data ownership tags; re-check if inventory sync internals change.
-- `AtlasScreen.extractRenderState()` uses `GuiGraphicsExtractor` and `MapRenderState` — both are MC 26.1-specific rendering APIs; re-check if the renderer API changes on update.
+- `AtlasScreen.extractRenderState()` uses `GuiGraphicsExtractor` and `MapRenderState` - both are MC `26.1` (2026 update 1)-specific rendering APIs; re-check if the renderer API changes on update.
