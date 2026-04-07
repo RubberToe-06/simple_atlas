@@ -22,7 +22,7 @@
 			"rubbertoe.simple_atlas.client.SimpleAtlasClient"
 		],
 		"fabric-datagen": [
-			"rubbertoe.simple_atlas.SimpleAtlasDataGenerator"
+          "rubbertoe.simple_atlas.datagen.SimpleAtlasDataGenerator"
 		]
 	},
 	"mixins": [

@@ -11,7 +11,7 @@ import rubbertoe.simple_atlas.SimpleAtlas;
 public record NavigateToWaypointPayload(
         double worldX,
         double worldZ,
-        String waypointName
+        int waypointIconIndex
 ) implements CustomPacketPayload {
 
     public static final Identifier ID = Identifier.fromNamespaceAndPath(SimpleAtlas.MOD_ID, "navigate_to_waypoint");
@@ -23,8 +23,8 @@ public record NavigateToWaypointPayload(
                     NavigateToWaypointPayload::worldX,
                     ByteBufCodecs.DOUBLE,
                     NavigateToWaypointPayload::worldZ,
-                    ByteBufCodecs.stringUtf8(32),
-                    NavigateToWaypointPayload::waypointName,
+                    ByteBufCodecs.INT,
+                    NavigateToWaypointPayload::waypointIconIndex,
                     NavigateToWaypointPayload::new
             );
 

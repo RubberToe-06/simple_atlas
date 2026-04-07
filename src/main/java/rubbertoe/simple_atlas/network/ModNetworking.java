@@ -1,28 +1,30 @@
 package rubbertoe.simple_atlas.network;
 
+import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.GlobalPos;
-import net.minecraft.core.component.DataComponents;
-import net.minecraft.network.chat.Component;
-import net.minecraft.world.item.component.CustomData;
+import net.minecraft.network.protocol.game.ClientboundTrackedWaypointPacket;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
-import net.minecraft.world.item.component.LodestoneTracker;
-import net.minecraft.world.level.Level;
-import rubbertoe.simple_atlas.navigation.NavigationCompassUtil;
+import net.minecraft.world.waypoints.Waypoint;
 import rubbertoe.simple_atlas.component.AtlasContents;
 import rubbertoe.simple_atlas.component.ModComponents;
 import rubbertoe.simple_atlas.item.ModItems;
+import rubbertoe.simple_atlas.navigation.WaypointIconCatalog;
 import rubbertoe.simple_atlas.server.AtlasViewManager;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 public final class ModNetworking {
     private static final int MAX_WAYPOINT_COUNT = 256;
+    private static final Map<UUID, Set<UUID>> PINNED_NAVIGATION_IDS = new ConcurrentHashMap<>();
 
     private ModNetworking() {}
 
@@ -47,6 +49,10 @@ public final class ModNetworking {
                 StopNavigatingPayload.TYPE,
                 StopNavigatingPayload.CODEC
         );
+        PayloadTypeRegistry.serverboundPlay().register(
+                UnpinWaypointPayload.TYPE,
+                UnpinWaypointPayload.CODEC
+        );
         ServerPlayNetworking.registerGlobalReceiver(
                 CloseAtlasViewPayload.TYPE,
                 (_, context) -> context.server().execute(() -> AtlasViewManager.stopViewing(context.player()))
@@ -54,7 +60,8 @@ public final class ModNetworking {
         ServerPlayNetworking.registerGlobalReceiver(
                 SaveAtlasWaypointsPayload.TYPE,
                 (payload, context) -> context.server().execute(() -> {
-                    ItemStack atlasStack = context.player().getMainHandItem();
+                    var player = context.player();
+                    ItemStack atlasStack = player.getMainHandItem();
                     if (!atlasStack.is(ModItems.ATLAS)) {
                         return;
                     }
@@ -71,88 +78,89 @@ public final class ModNetworking {
                             payload.nextWaypointNumber()
                     );
                     atlasStack.set(ModComponents.ATLAS_CONTENTS, updated);
+
+                    // Keep locator-bar pins in sync with saved waypoint data.
+                    Set<UUID> pinnedIds = PINNED_NAVIGATION_IDS.get(player.getUUID());
+                    if (pinnedIds == null || pinnedIds.isEmpty()) {
+                        return;
+                    }
+
+                    Set<UUID> validWaypointIds = new HashSet<>();
+                    for (AtlasContents.WaypointData waypoint : sanitizedWaypoints) {
+                        validWaypointIds.add(WaypointIconCatalog.navigationWaypointId(waypoint.worldX(), waypoint.worldZ()));
+                    }
+
+                    List<UUID> stalePinnedIds = pinnedIds.stream()
+                            .filter(id -> !validWaypointIds.contains(id))
+                            .toList();
+                    if (stalePinnedIds.isEmpty()) {
+                        return;
+                    }
+
+                    stalePinnedIds.forEach(id -> player.connection.send(ClientboundTrackedWaypointPacket.removeWaypoint(id)));
+                    for (UUID staleId : stalePinnedIds) {
+                        pinnedIds.remove(staleId);
+                    }
+                    if (pinnedIds.isEmpty()) {
+                        PINNED_NAVIGATION_IDS.remove(player.getUUID());
+                    }
                 })
         );
         ServerPlayNetworking.registerGlobalReceiver(
                 NavigateToWaypointPayload.TYPE,
                 (payload, context) -> context.server().execute(() -> {
                     var player = context.player();
+                    UUID playerId = player.getUUID();
+                    UUID newNavigationId = WaypointIconCatalog.navigationWaypointId(payload.worldX(), payload.worldZ());
 
-                    // Keep only one special navigation compass at a time.
-                    ItemStack offhand = player.getOffhandItem();
-                    if (!offhand.isEmpty() && !isNavigationCompass(offhand)) {
-                        ItemStack displaced = offhand.copy();
-                        player.getInventory().setItem(40, ItemStack.EMPTY);
-                        if (!player.getInventory().add(displaced)) {
-                            player.drop(displaced, false);
-                        }
-                    }
-
-                    removeNavigationCompasses(player);
-
-                    ItemStack compass = new ItemStack(Items.COMPASS);
-
-                    // Set custom name via component
-                    compass.set(DataComponents.CUSTOM_NAME,
-                            Component.literal("Navigate to: " + payload.waypointName()));
-                    CustomData.update(DataComponents.CUSTOM_DATA, compass, tag -> {
-                        tag.putBoolean(NavigationCompassUtil.NAV_COMPASS_FLAG_KEY, true);
-                        tag.putString(NavigationCompassUtil.NAV_COMPASS_OWNER_KEY, player.getUUID().toString());
-                    });
-
-                    // Set lodestone tracker to point to waypoint coordinates
-                    BlockPos pos = BlockPos.containing(
-                            payload.worldX(), 64.0, payload.worldZ()
-                    );
-
-                    var level = context.server().getLevel(Level.OVERWORLD);
-                    if (level == null) {
+                    Set<UUID> pinnedIds = PINNED_NAVIGATION_IDS.computeIfAbsent(playerId, _ -> new HashSet<>());
+                    if (!pinnedIds.add(newNavigationId)) {
                         return;
                     }
-                    GlobalPos target = GlobalPos.of(
-                            level.dimension(),
-                            pos
-                    );
 
-                    var lodestoneTracker = new LodestoneTracker(
-                            Optional.of(target),
-                            false
-                    );
-                    compass.set(DataComponents.LODESTONE_TRACKER, lodestoneTracker);
+                    Waypoint.Icon icon = new Waypoint.Icon();
+                    icon.style = WaypointIconCatalog.styleKeyForIndex(payload.waypointIconIndex());
+                    icon.color = Optional.of(0xFFFFFF);
 
-                    // Place compass in offhand (Inventory.SLOT_OFFHAND = 40)
-                    player.getInventory().setItem(40, compass);
-                    player.getInventory().setChanged();
-
-                    // Force inventory sync to client
-                    player.containerMenu.broadcastChanges();
-                    player.connection.send(player.getInventory().createInventoryUpdatePacket(40));
+                    BlockPos pos = BlockPos.containing(payload.worldX(), player.getY(), payload.worldZ());
+                    player.connection.send(ClientboundTrackedWaypointPacket.addWaypointPosition(newNavigationId, icon, pos));
                 })
         );
         ServerPlayNetworking.registerGlobalReceiver(
                 StopNavigatingPayload.TYPE,
                 (_, context) -> context.server().execute(() -> {
                     var player = context.player();
-                    removeNavigationCompasses(player);
-                    player.getInventory().setChanged();
-                    player.containerMenu.broadcastChanges();
-                    player.connection.send(player.getInventory().createInventoryUpdatePacket(40));
+                    Set<UUID> removedNavigationIds = PINNED_NAVIGATION_IDS.remove(player.getUUID());
+                    if (removedNavigationIds == null) {
+                        return;
+                    }
+
+                    removedNavigationIds.forEach(waypointId ->
+                            player.connection.send(ClientboundTrackedWaypointPacket.removeWaypoint(waypointId))
+                    );
                 })
         );
-    }
+        ServerPlayNetworking.registerGlobalReceiver(
+                UnpinWaypointPayload.TYPE,
+                (payload, context) -> context.server().execute(() -> {
+                    var player = context.player();
+                    UUID playerId = player.getUUID();
+                    UUID unpinNavigationId = WaypointIconCatalog.navigationWaypointId(payload.worldX(), payload.worldZ());
 
-    private static boolean isNavigationCompass(ItemStack stack) {
-        return NavigationCompassUtil.isNavigationCompass(stack);
-    }
+                    Set<UUID> pinnedIds = PINNED_NAVIGATION_IDS.get(playerId);
+                    if (pinnedIds == null || !pinnedIds.remove(unpinNavigationId)) {
+                        return;
+                    }
 
-    private static void removeNavigationCompasses(net.minecraft.server.level.ServerPlayer player) {
-        int size = player.getInventory().getContainerSize();
-        for (int i = 0; i < size; i++) {
-            ItemStack stack = player.getInventory().getItem(i);
-            if (isNavigationCompass(stack)) {
-                player.getInventory().setItem(i, ItemStack.EMPTY);
-            }
-        }
+                    player.connection.send(ClientboundTrackedWaypointPacket.removeWaypoint(unpinNavigationId));
+                    if (pinnedIds.isEmpty()) {
+                        PINNED_NAVIGATION_IDS.remove(playerId);
+                    }
+                })
+        );
+        ServerPlayConnectionEvents.DISCONNECT.register((handler, _) ->
+                PINNED_NAVIGATION_IDS.remove(handler.player.getUUID())
+        );
     }
 
     private static List<AtlasContents.WaypointData> sanitizeWaypoints(List<AtlasContents.WaypointData> waypoints) {

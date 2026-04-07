@@ -1,6 +1,7 @@
 package rubbertoe.simple_atlas.client.screen;
 
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+import com.mojang.datafixers.util.Either;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
@@ -10,15 +11,10 @@ import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.client.renderer.state.MapRenderState;
 import net.minecraft.network.chat.Component;
-import net.minecraft.core.BlockPos;
-import net.minecraft.core.component.DataComponents;
 import net.minecraft.util.Mth;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.saveddata.maps.MapId;
 import net.minecraft.world.level.saveddata.maps.MapItemSavedData;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
-import net.minecraft.world.item.component.LodestoneTracker;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.lwjgl.glfw.GLFW;
@@ -32,12 +28,16 @@ import rubbertoe.simple_atlas.network.CloseAtlasViewPayload;
 import rubbertoe.simple_atlas.network.NavigateToWaypointPayload;
 import rubbertoe.simple_atlas.network.OpenAtlasScreenPayload;
 import rubbertoe.simple_atlas.network.SaveAtlasWaypointsPayload;
-import rubbertoe.simple_atlas.network.StopNavigatingPayload;
+import rubbertoe.simple_atlas.network.UnpinWaypointPayload;
+import rubbertoe.simple_atlas.navigation.WaypointIconCatalog;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 
 public class AtlasScreen extends Screen {
     private final Map<Integer, MapRenderState> renderStates = new HashMap<>();
@@ -51,8 +51,13 @@ public class AtlasScreen extends Screen {
     private static final int PAGE_AREA_WIDTH = 236;
     private static final int PAGE_AREA_HEIGHT = 143;
     private static final Identifier PLAYER_MARKER_TEXTURE = Identifier.fromNamespaceAndPath(SimpleAtlas.MOD_ID, "textures/gui/player_marker.png");
+    private static final Identifier PINNED_WAYPOINT_MARKER_TEXTURE = Identifier.fromNamespaceAndPath(SimpleAtlas.MOD_ID, "textures/gui/waypoint_pinned_marker.png");
     private static final int PLAYER_MARKER_TEXTURE_SIZE = 14;
     private static final int PLAYER_MARKER_RENDER_SIZE = 12;
+    private static final int PINNED_WAYPOINT_MARKER_TEXTURE_SIZE = 8;
+    private static final int PINNED_WAYPOINT_MARKER_RENDER_SIZE = 7;
+    private static final int PINNED_WAYPOINT_MARKER_OFFSET_X = -3;
+    private static final int PINNED_WAYPOINT_MARKER_OFFSET_Y = -2;
     private static final int WAYPOINT_TEXTURE_SIZE = 16;
     private static final int WAYPOINT_RENDER_SIZE = 12;
     private static final int WAYPOINT_NAME_MAX_LENGTH = 32;
@@ -64,7 +69,8 @@ public class AtlasScreen extends Screen {
     private static final int WAYPOINT_PICKER_INPUT_HEIGHT = 16;
     private static final int WAYPOINT_CONTEXT_MENU_WIDTH = 116;
     private static final int WAYPOINT_CONTEXT_MENU_ROW_HEIGHT = 14;
-    private static final int WAYPOINT_CONTEXT_MENU_ROWS = 3;
+    private static final int WAYPOINT_CONTEXT_MENU_WAYPOINT_ROWS = 4;
+    private static final int WAYPOINT_CONTEXT_MENU_MAP_ROWS = 2;
     private static final int ICON_HOVER_TITLE_PADDING = 4;
     private static final int GRID_DASH_LENGTH = 6;
     private static final int GRID_DASH_GAP = 4;
@@ -90,7 +96,6 @@ public class AtlasScreen extends Screen {
     private double panY = 0;
     private boolean leftDragging = false;
     private float zoom = 2.0f;
-    private int closeScreenTicksRemaining = -1;
     private static final float MIN_ZOOM = 0.25f;
     private static final float MAX_ZOOM = 4.0f;
     private static final float ZOOM_STEP = 1.1f;
@@ -122,60 +127,9 @@ public class AtlasScreen extends Screen {
     }
 
     private static List<WaypointIconOption> createWaypointIconOptions() {
-        return List.of(
-                // Generic markers
-                createIconOption("home.png"),
-                createIconOption("nether_portal.png"),
-                createIconOption("red_x.png"),
-                createIconOption("target_point.png"),
-                createIconOption("target_x.png"),
-                createIconOption("skull.png"),
-
-                // Structures
-                createIconOption("jungle_temple.png"),
-                createIconOption("ocean_monument.png"),
-                createIconOption("plains_village.png"),
-                createIconOption("savanna_village.png"),
-                createIconOption("snowy_village.png"),
-                createIconOption("swamp_hut.png"),
-                createIconOption("taiga_village.png"),
-                createIconOption("trial_chambers.png"),
-                createIconOption("woodland_mansion.png"),
-
-                // Tools
-                createIconOption("axe.png"),
-                createIconOption("pickaxe.png"),
-                createIconOption("shovel.png"),
-                createIconOption("sword.png"),
-
-                // Resources
-                createIconOption("coal.png"),
-                createIconOption("copper_ingot.png"),
-                createIconOption("diamond.png"),
-                createIconOption("emerald.png"),
-                createIconOption("gold_ingot.png"),
-                createIconOption("iron_ingot.png"),
-                createIconOption("lapis_lazuli.png"),
-                createIconOption("redstone_dust.png"),
-
-                // Banners (rainbow order)
-                createIconOption("red_banner.png"),
-                createIconOption("orange_banner.png"),
-                createIconOption("yellow_banner.png"),
-                createIconOption("lime_banner.png"),
-                createIconOption("green_banner.png"),
-                createIconOption("cyan_banner.png"),
-                createIconOption("light_blue_banner.png"),
-                createIconOption("blue_banner.png"),
-                createIconOption("purple_banner.png"),
-                createIconOption("magenta_banner.png"),
-                createIconOption("pink_banner.png"),
-                createIconOption("white_banner.png"),
-                createIconOption("light_gray_banner.png"),
-                createIconOption("gray_banner.png"),
-                createIconOption("black_banner.png"),
-                createIconOption("brown_banner.png")
-        );
+        return WaypointIconCatalog.iconKeys().stream()
+                .map(key -> createIconOption(key + ".png"))
+                .toList();
     }
 
     private static class WaypointDraft {
@@ -405,7 +359,16 @@ public class AtlasScreen extends Screen {
     }
 
     private int getContextMenuRowCount() {
-        return contextMenuWaypointIndex >= 0 ? WAYPOINT_CONTEXT_MENU_ROWS : 1;
+        if (contextMenuWaypointIndex >= 0) {
+            return WAYPOINT_CONTEXT_MENU_WAYPOINT_ROWS;
+        }
+        return contextMenuWorldPoint != null ? WAYPOINT_CONTEXT_MENU_MAP_ROWS : 0;
+    }
+
+    private void copyCoordinatesToClipboard(double worldX, double worldZ) {
+        int blockX = Mth.floor(worldX);
+        int blockZ = Mth.floor(worldZ);
+        Minecraft.getInstance().keyboardHandler.setClipboard(blockX + ", " + blockZ);
     }
 
     private void openWaypointContextMenu(int waypointIndex, double mouseX, double mouseY) {
@@ -419,8 +382,9 @@ public class AtlasScreen extends Screen {
     private void openNewWaypointContextMenu(WorldPoint worldPoint, double mouseX, double mouseY) {
         contextMenuWaypointIndex = -1;
         contextMenuWorldPoint = worldPoint;
+        int menuHeight = WAYPOINT_CONTEXT_MENU_ROW_HEIGHT * getContextMenuRowCount();
         contextMenuX = Mth.clamp((int) mouseX, 4, Math.max(4, this.width - WAYPOINT_CONTEXT_MENU_WIDTH - 4));
-        contextMenuY = Mth.clamp((int) mouseY, 4, Math.max(4, this.height - WAYPOINT_CONTEXT_MENU_ROW_HEIGHT - 4));
+        contextMenuY = Mth.clamp((int) mouseY, 4, Math.max(4, this.height - menuHeight - 4));
     }
 
     private int getContextMenuOptionAt(double mouseX, double mouseY) {
@@ -479,7 +443,7 @@ public class AtlasScreen extends Screen {
         this.editingWaypointIndex = -1;
     }
 
-    private void navigateToWaypoint(int waypointIndex) {
+    private void pinWaypointToLocatorBar(int waypointIndex) {
         if (waypointIndex < 0 || waypointIndex >= atlasWaypoints.size()) {
             return;
         }
@@ -488,19 +452,30 @@ public class AtlasScreen extends Screen {
         ClientPlayNetworking.send(new NavigateToWaypointPayload(
                 waypoint.worldX(),
                 waypoint.worldZ(),
-                waypoint.name()
+                waypoint.iconIndex()
         ));
-
-        // Schedule screen close after 2 ticks to allow inventory packet to arrive
-        closeScreenTicksRemaining = 2;
     }
 
-    private void stopNavigating() {
-        ClientPlayNetworking.send(new StopNavigatingPayload());
-        closeScreenTicksRemaining = 2;
+    private void unpinWaypointFromLocatorBar(int waypointIndex) {
+        if (waypointIndex < 0 || waypointIndex >= atlasWaypoints.size()) {
+            return;
+        }
+
+        AtlasContents.WaypointData waypoint = atlasWaypoints.get(waypointIndex);
+        ClientPlayNetworking.send(new UnpinWaypointPayload(
+                waypoint.worldX(),
+                waypoint.worldZ()
+        ));
     }
 
-    private boolean isWaypointCurrentlyNavigated(int waypointIndex) {
+    private void unpinWaypointFromLocatorBar(AtlasContents.WaypointData waypoint) {
+        ClientPlayNetworking.send(new UnpinWaypointPayload(
+                waypoint.worldX(),
+                waypoint.worldZ()
+        ));
+    }
+
+    private boolean isWaypointPinnedToLocatorBar(int waypointIndex) {
         if (waypointIndex < 0 || waypointIndex >= atlasWaypoints.size()) {
             return false;
         }
@@ -509,30 +484,92 @@ public class AtlasScreen extends Screen {
         if (minecraft.player == null) {
             return false;
         }
-
-        ItemStack offhand = minecraft.player.getOffhandItem();
-        if (!offhand.is(Items.COMPASS)) {
-            return false;
-        }
-
-        Component customName = offhand.get(DataComponents.CUSTOM_NAME);
-        if (customName == null || !customName.getString().startsWith("Navigate to: ")) {
-            return false;
-        }
-
-        LodestoneTracker tracker = offhand.get(DataComponents.LODESTONE_TRACKER);
-        if (tracker == null || tracker.target().isEmpty()) {
-            return false;
-        }
-
         AtlasContents.WaypointData waypoint = atlasWaypoints.get(waypointIndex);
-        BlockPos waypointPos = BlockPos.containing(waypoint.worldX(), 64.0, waypoint.worldZ());
-        return tracker.target().get().pos().equals(waypointPos);
+        UUID navigationId = WaypointIconCatalog.navigationWaypointId(waypoint.worldX(), waypoint.worldZ());
+        final boolean[] matched = {false};
+        minecraft.player.connection.getWaypointManager().forEachWaypoint(minecraft.player, trackedWaypoint -> {
+            Either<UUID, String> id = trackedWaypoint.id();
+            if (id.left().isPresent() && id.left().get().equals(navigationId)) {
+                matched[0] = true;
+            }
+        });
+        return matched[0];
+    }
+
+    private Set<UUID> getPinnedWaypointIds(Minecraft minecraft) {
+        if (minecraft.player == null) {
+            return Set.of();
+        }
+
+        Set<UUID> pinnedIds = new HashSet<>();
+        minecraft.player.connection.getWaypointManager().forEachWaypoint(minecraft.player, trackedWaypoint -> {
+            Either<UUID, String> id = trackedWaypoint.id();
+            id.left().ifPresent(pinnedIds::add);
+        });
+        return pinnedIds;
+    }
+
+    private void renderPinnedWaypointMarkers(
+            GuiGraphicsExtractor graphics,
+            Minecraft minecraft,
+            float mapOriginX,
+            float mapOriginY,
+            float scaledTileSize
+    ) {
+        Set<UUID> pinnedIds = getPinnedWaypointIds(minecraft);
+        if (pinnedIds.isEmpty()) {
+            return;
+        }
+
+        for (int i = 0; i < atlasWaypoints.size(); i++) {
+            int iconListIndex = i + 1;
+            if (iconListIndex >= atlasIcons.size()) {
+                continue;
+            }
+
+            AtlasContents.WaypointData waypoint = atlasWaypoints.get(i);
+            UUID waypointId = WaypointIconCatalog.navigationWaypointId(waypoint.worldX(), waypoint.worldZ());
+            if (!pinnedIds.contains(waypointId)) {
+                continue;
+            }
+
+            AtlasIcon icon = atlasIcons.get(iconListIndex);
+            AtlasIcon.Anchor anchor = icon.resolveAnchor(minecraft, tiles, mapOriginX, mapOriginY, scaledTileSize);
+            if (anchor == null) {
+                continue;
+            }
+
+            float markerX = anchor.screenX() + WAYPOINT_RENDER_SIZE / 2.0f + PINNED_WAYPOINT_MARKER_OFFSET_X;
+            float markerY = anchor.screenY() - icon.renderHeight() / 2.0f + PINNED_WAYPOINT_MARKER_OFFSET_Y;
+
+            graphics.pose().pushMatrix();
+            graphics.pose().translate(markerX, markerY);
+            graphics.blit(
+                    RenderPipelines.GUI_TEXTURED,
+                    PINNED_WAYPOINT_MARKER_TEXTURE,
+                    0,
+                    0,
+                    0.0f,
+                    0.0f,
+                    PINNED_WAYPOINT_MARKER_RENDER_SIZE,
+                    PINNED_WAYPOINT_MARKER_RENDER_SIZE,
+                    PINNED_WAYPOINT_MARKER_TEXTURE_SIZE,
+                    PINNED_WAYPOINT_MARKER_TEXTURE_SIZE,
+                    PINNED_WAYPOINT_MARKER_TEXTURE_SIZE,
+                    PINNED_WAYPOINT_MARKER_TEXTURE_SIZE
+            );
+            graphics.pose().popMatrix();
+        }
     }
 
     private void deleteWaypoint(int waypointIndex) {
         if (waypointIndex < 0 || waypointIndex >= atlasWaypoints.size()) {
             return;
+        }
+
+        AtlasContents.WaypointData removedWaypoint = atlasWaypoints.get(waypointIndex);
+        if (isWaypointPinnedToLocatorBar(waypointIndex)) {
+            unpinWaypointFromLocatorBar(removedWaypoint);
         }
 
         atlasWaypoints.remove(waypointIndex);
@@ -562,14 +599,16 @@ public class AtlasScreen extends Screen {
         }
 
         if (contextMenuWaypointIndex >= 0) {
-            boolean navigatingThisWaypoint = isWaypointCurrentlyNavigated(contextMenuWaypointIndex);
-            String firstAction = navigatingThisWaypoint ? "Stop Navigating" : "Navigate";
-            int firstColor = navigatingThisWaypoint ? 0xFFFFB366 : 0xFF8FE0FF;
+            boolean pinnedThisWaypoint = isWaypointPinnedToLocatorBar(contextMenuWaypointIndex);
+            String firstAction = pinnedThisWaypoint ? "Stop Locating" : "Locate";
+            int firstColor = pinnedThisWaypoint ? 0xFFFFB366 : 0xFF8FE0FF;
             graphics.textWithBackdrop(this.font, Component.literal(firstAction), contextMenuX + 6, contextMenuY + 3, this.font.width(firstAction), firstColor);
             graphics.textWithBackdrop(this.font, Component.literal("Edit waypoint"), contextMenuX + 6, contextMenuY + WAYPOINT_CONTEXT_MENU_ROW_HEIGHT + 3, this.font.width("Edit waypoint"), 0xFFFFFFFF);
             graphics.textWithBackdrop(this.font, Component.literal("Delete waypoint"), contextMenuX + 6, contextMenuY + WAYPOINT_CONTEXT_MENU_ROW_HEIGHT * 2 + 3, this.font.width("Delete waypoint"), 0xFFFF8080);
+            graphics.textWithBackdrop(this.font, Component.literal("Copy coordinates"), contextMenuX + 6, contextMenuY + WAYPOINT_CONTEXT_MENU_ROW_HEIGHT * 3 + 3, this.font.width("Copy coordinates"), 0xFFB8E8FF);
         } else {
             graphics.textWithBackdrop(this.font, Component.literal("New waypoint"), contextMenuX + 6, contextMenuY + 3, this.font.width("New waypoint"), 0xFFFFFFFF);
+            graphics.textWithBackdrop(this.font, Component.literal("Copy coordinates"), contextMenuX + 6, contextMenuY + WAYPOINT_CONTEXT_MENU_ROW_HEIGHT + 3, this.font.width("Copy coordinates"), 0xFFB8E8FF);
         }
     }
 
@@ -840,19 +879,6 @@ public class AtlasScreen extends Screen {
         );
     }
 
-    @Override
-    public void tick() {
-        super.tick();
-        
-        if (closeScreenTicksRemaining > 0) {
-            closeScreenTicksRemaining--;
-            if (closeScreenTicksRemaining == 0) {
-                persistWaypointState();
-                ClientPlayNetworking.send(new CloseAtlasViewPayload());
-                Minecraft.getInstance().setScreen(null);
-            }
-        }
-    }
 
     @Override
     public void extractRenderState(@NonNull GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
@@ -907,6 +933,8 @@ public class AtlasScreen extends Screen {
             atlasIcon.render(graphics, minecraft, tiles, mapOriginX, mapOriginY, scaledTileSize);
         }
 
+        renderPinnedWaypointMarkers(graphics, minecraft, mapOriginX, mapOriginY, scaledTileSize);
+
         if (waypointDraft != null && !waypointIconOptions.isEmpty()) {
             Component draftTitle = Component.literal(waypointDraft.name.isBlank() ? "Waypoint" : waypointDraft.name);
             AtlasIcon draftIcon = createWaypointIcon(waypointDraft.worldX, waypointDraft.worldZ, draftTitle, waypointDraft.iconIndex);
@@ -956,18 +984,25 @@ public class AtlasScreen extends Screen {
                 closeContextMenu();
                 if (waypointIndex >= 0) {
                     if (option == 0) {
-                        if (isWaypointCurrentlyNavigated(waypointIndex)) {
-                            stopNavigating();
+                        if (isWaypointPinnedToLocatorBar(waypointIndex)) {
+                            unpinWaypointFromLocatorBar(waypointIndex);
                         } else {
-                            navigateToWaypoint(waypointIndex);
+                            pinWaypointToLocatorBar(waypointIndex);
                         }
                     } else if (option == 1) {
                         beginEditWaypoint(waypointIndex);
                     } else if (option == 2) {
                         deleteWaypoint(waypointIndex);
+                    } else if (option == 3) {
+                        AtlasContents.WaypointData waypoint = atlasWaypoints.get(waypointIndex);
+                        copyCoordinatesToClipboard(waypoint.worldX(), waypoint.worldZ());
                     }
-                } else if (option == 0 && worldPoint != null) {
-                    beginNewWaypoint(worldPoint);
+                } else if (worldPoint != null) {
+                    if (option == 0) {
+                        beginNewWaypoint(worldPoint);
+                    } else if (option == 1) {
+                        copyCoordinatesToClipboard(worldPoint.x(), worldPoint.z());
+                    }
                 }
                 return true;
             }

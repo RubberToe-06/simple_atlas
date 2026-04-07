@@ -1,10 +1,7 @@
-package rubbertoe.simple_atlas;
+package rubbertoe.simple_atlas.datagen;
 
 import net.fabricmc.fabric.api.datagen.v1.DataGeneratorEntrypoint;
 import net.fabricmc.fabric.api.datagen.v1.FabricDataGenerator;
-import rubbertoe.simple_atlas.datagen.SimpleAtlasLangProvider;
-import rubbertoe.simple_atlas.datagen.SimpleAtlasModelProvider;
-import rubbertoe.simple_atlas.datagen.SimpleAtlasRecipeProvider;
 
 public class SimpleAtlasDataGenerator implements DataGeneratorEntrypoint {
 	@Override
