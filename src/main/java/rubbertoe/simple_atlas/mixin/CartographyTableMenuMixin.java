@@ -35,6 +35,24 @@ public abstract class CartographyTableMenuMixin {
             ItemStack resultStack,
             CallbackInfo ci
     ) {
+        // ── Blank map(s) + atlas → store all blank maps into the atlas ────────
+        if (mapStack.is(Items.MAP) && additionalStack.is(ModItems.ATLAS)) {
+            AtlasContents blankContents = additionalStack.getOrDefault(
+                    ModComponents.ATLAS_CONTENTS, AtlasContents.EMPTY);
+
+            AtlasContents updated = blankContents.withAddedBlankMaps(mapStack.getCount());
+            ItemStack result = additionalStack.copyWithCount(1);
+            result.set(ModComponents.ATLAS_CONTENTS, updated);
+
+            if (!ItemStack.matches(result, resultStack)) {
+                this.resultContainer.setItem(2, result);
+                ((CartographyTableMenu) (Object) this).broadcastChanges();
+            }
+            ci.cancel();
+            return;
+        }
+
+        // ── Filled map + atlas → add the filled map to the atlas ──────────────
         if (!mapStack.is(Items.FILLED_MAP) || !additionalStack.is(ModItems.ATLAS)) {
             return;
         }
@@ -110,6 +128,34 @@ public abstract class CartographyTableMenuMixin {
         ItemStack stack = slot.getItem();
         ItemStack clicked = stack.copy();
 
+        // ── Blank map from inventory → slot 0 when atlas occupies slot 1 ──────
+        if (stack.is(Items.MAP) && slotIndex >= 3 && slotIndex < 39) {
+            Slot additionalSlot = ((CartographyTableMenu) (Object) this).slots.get(1);
+            if (additionalSlot.getItem().is(ModItems.ATLAS)) {
+                if (!((AbstractContainerMenuInvoker) this).simple_atlas$invokeMoveItemStackTo(stack, 0, 1, false)) {
+                    cir.setReturnValue(ItemStack.EMPTY);
+                    return;
+                }
+
+                if (stack.isEmpty()) {
+                    slot.setByPlayer(ItemStack.EMPTY);
+                }
+
+                slot.setChanged();
+
+                if (stack.getCount() == clicked.getCount()) {
+                    cir.setReturnValue(ItemStack.EMPTY);
+                    return;
+                }
+
+                slot.onTake(player, stack);
+                ((AbstractContainerMenuInvoker) this).simple_atlas$invokeBroadcastChanges();
+                cir.setReturnValue(clicked);
+                return;
+            }
+        }
+
+        // ── Atlas from inventory → slot 1 ─────────────────────────────────────
         if (stack.is(ModItems.ATLAS) && slotIndex >= 3 && slotIndex < 39) {
             if (!((AbstractContainerMenuInvoker) this).simple_atlas$invokeMoveItemStackTo(stack, 1, 2, false)) {
                 cir.setReturnValue(ItemStack.EMPTY);

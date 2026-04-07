@@ -9,7 +9,7 @@ import java.util.Objects;
 import java.util.SequencedSet;
 
 public final class AtlasContents {
-    public static final AtlasContents EMPTY = new AtlasContents(List.of(), List.of(), 0, 1);
+    public static final AtlasContents EMPTY = new AtlasContents(List.of(), List.of(), 0, 1, 0);
 
     private static final int MAX_WAYPOINT_NAME_LENGTH = 32;
 
@@ -40,7 +40,9 @@ public final class AtlasContents {
                     Codec.INT.optionalFieldOf("selected_waypoint_icon_index", 0)
                             .forGetter(AtlasContents::selectedWaypointIconIndex),
                     Codec.INT.optionalFieldOf("next_waypoint_number", 1)
-                            .forGetter(AtlasContents::nextWaypointNumber)
+                            .forGetter(AtlasContents::nextWaypointNumber),
+                    Codec.INT.optionalFieldOf("blank_map_count", 0)
+                            .forGetter(AtlasContents::blankMapCount)
             ).apply(instance, AtlasContents::new)
     );
 
@@ -49,17 +51,20 @@ public final class AtlasContents {
     private final List<WaypointData> waypoints;
     private final int selectedWaypointIconIndex;
     private final int nextWaypointNumber;
+    private final int blankMapCount;
 
     public AtlasContents(
             List<Integer> mapIds,
             List<WaypointData> waypoints,
             int selectedWaypointIconIndex,
-            int nextWaypointNumber
+            int nextWaypointNumber,
+            int blankMapCount
     ) {
         this.mapIdSet = new LinkedHashSet<>(mapIds);
         this.waypoints = List.copyOf(waypoints);
         this.selectedWaypointIconIndex = Math.max(0, selectedWaypointIconIndex);
         this.nextWaypointNumber = Math.max(1, nextWaypointNumber);
+        this.blankMapCount = Math.max(0, blankMapCount);
     }
 
     /** Returns map IDs in insertion order. */
@@ -79,6 +84,10 @@ public final class AtlasContents {
         return nextWaypointNumber;
     }
 
+    public int blankMapCount() {
+        return blankMapCount;
+    }
+
     /** O(1) membership check. */
     public boolean contains(int mapId) {
         return mapIdSet.contains(mapId);
@@ -92,11 +101,25 @@ public final class AtlasContents {
 
         LinkedHashSet<Integer> updated = new LinkedHashSet<>(mapIdSet);
         updated.add(mapId);
-        return new AtlasContents(List.copyOf(updated), waypoints, selectedWaypointIconIndex, nextWaypointNumber);
+        return new AtlasContents(List.copyOf(updated), waypoints, selectedWaypointIconIndex, nextWaypointNumber, blankMapCount);
     }
 
     public AtlasContents withWaypointState(List<WaypointData> waypoints, int selectedWaypointIconIndex, int nextWaypointNumber) {
-        return new AtlasContents(mapIds(), waypoints, selectedWaypointIconIndex, nextWaypointNumber);
+        return new AtlasContents(mapIds(), waypoints, selectedWaypointIconIndex, nextWaypointNumber, blankMapCount);
+    }
+
+    public AtlasContents withAddedBlankMaps(int count) {
+        if (count <= 0) {
+            return this;
+        }
+        return new AtlasContents(mapIds(), waypoints, selectedWaypointIconIndex, nextWaypointNumber, blankMapCount + count);
+    }
+
+    public AtlasContents withConsumedBlankMap() {
+        if (blankMapCount <= 0) {
+            return this;
+        }
+        return new AtlasContents(mapIds(), waypoints, selectedWaypointIconIndex, nextWaypointNumber, blankMapCount - 1);
     }
 
     public int size() {
@@ -123,16 +146,17 @@ public final class AtlasContents {
         return mapIdSet.equals(other.mapIdSet)
                 && waypoints.equals(other.waypoints)
                 && selectedWaypointIconIndex == other.selectedWaypointIconIndex
-                && nextWaypointNumber == other.nextWaypointNumber;
+                && nextWaypointNumber == other.nextWaypointNumber
+                && blankMapCount == other.blankMapCount;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(mapIdSet, waypoints, selectedWaypointIconIndex, nextWaypointNumber);
+        return Objects.hash(mapIdSet, waypoints, selectedWaypointIconIndex, nextWaypointNumber, blankMapCount);
     }
 
     @Override
     public String toString() {
-        return "AtlasContents{mapIds=" + mapIdSet + ", waypoints=" + waypoints.size() + "}";
+        return "AtlasContents{mapIds=" + mapIdSet + ", waypoints=" + waypoints.size() + ", blankMaps=" + blankMapCount + "}";
     }
 }

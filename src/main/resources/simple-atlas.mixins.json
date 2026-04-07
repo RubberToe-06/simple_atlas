@@ -5,7 +5,9 @@
   "mixins": [
     "AbstractContainerMenuInvoker",
     "CartographyTableAdditionalSlotMixin",
-    "CartographyTableMenuMixin"
+    "CartographyTableMapSlotMixin",
+    "CartographyTableMenuMixin",
+    "CartographyTableResultSlotMixin"
   ],
   "injectors": {
     "defaultRequire": 1
