@@ -79,39 +79,14 @@ public final class ModNetworking {
                             payload.nextWaypointNumber()
                     );
                     atlasStack.set(ModComponents.ATLAS_CONTENTS, updated);
-
-                    // Keep locator-bar pins in sync with saved waypoint data.
-                    Set<UUID> pinnedIds = PINNED_NAVIGATION_IDS.get(player.getUUID());
-                    if (pinnedIds == null || pinnedIds.isEmpty()) {
-                        return;
-                    }
-
-                    Set<UUID> validWaypointIds = new HashSet<>();
-                    for (AtlasContents.WaypointData waypoint : sanitizedWaypoints) {
-                        validWaypointIds.add(WaypointIconCatalog.navigationWaypointId(waypoint.worldX(), waypoint.worldZ()));
-                    }
-
-                    List<UUID> stalePinnedIds = pinnedIds.stream()
-                            .filter(id -> !validWaypointIds.contains(id))
-                            .toList();
-                    if (stalePinnedIds.isEmpty()) {
-                        return;
-                    }
-
-                    stalePinnedIds.forEach(id -> player.connection.send(ClientboundTrackedWaypointPacket.removeWaypoint(id)));
-                    for (UUID staleId : stalePinnedIds) {
-                        pinnedIds.remove(staleId);
-                    }
-                    if (pinnedIds.isEmpty()) {
-                        PINNED_NAVIGATION_IDS.remove(player.getUUID());
-                    }
+                    reconcilePinnedWaypoints(player, sanitizedWaypoints);
                 })
         );
         ServerPlayNetworking.registerGlobalReceiver(
                 NavigateToWaypointPayload.TYPE,
                 (payload, context) -> context.server().execute(() -> {
                     var player = context.player();
-                    if (!playerHasAtlasInInventory(player)) {
+                    if (playerLacksAtlasInInventory(player)) {
                         clearPinnedWaypoints(player);
                         return;
                     }
@@ -119,8 +94,7 @@ public final class ModNetworking {
                     UUID playerId = player.getUUID();
                     UUID newNavigationId = WaypointIconCatalog.navigationWaypointId(payload.worldX(), payload.worldZ());
 
-                    Set<UUID> pinnedIds = PINNED_NAVIGATION_IDS.computeIfAbsent(playerId, _ -> new HashSet<>());
-                    if (!pinnedIds.add(newNavigationId)) {
+                    if (!addPinnedWaypoint(playerId, newNavigationId)) {
                         return;
                     }
 
@@ -129,7 +103,7 @@ public final class ModNetworking {
                     icon.color = Optional.of(0xFFFFFF);
 
                     BlockPos pos = BlockPos.containing(payload.worldX(), player.getY(), payload.worldZ());
-                    player.connection.send(ClientboundTrackedWaypointPacket.addWaypointPosition(newNavigationId, icon, pos));
+                    sendPinnedWaypoint(player, newNavigationId, icon, pos);
                 })
         );
         ServerPlayNetworking.registerGlobalReceiver(
@@ -143,15 +117,11 @@ public final class ModNetworking {
                     UUID playerId = player.getUUID();
                     UUID unpinNavigationId = WaypointIconCatalog.navigationWaypointId(payload.worldX(), payload.worldZ());
 
-                    Set<UUID> pinnedIds = PINNED_NAVIGATION_IDS.get(playerId);
-                    if (pinnedIds == null || !pinnedIds.remove(unpinNavigationId)) {
+                    if (!removePinnedWaypoint(playerId, unpinNavigationId)) {
                         return;
                     }
 
-                    player.connection.send(ClientboundTrackedWaypointPacket.removeWaypoint(unpinNavigationId));
-                    if (pinnedIds.isEmpty()) {
-                        PINNED_NAVIGATION_IDS.remove(playerId);
-                    }
+                    sendRemovedPinnedWaypoint(player, unpinNavigationId);
                 })
         );
         ServerPlayConnectionEvents.DISCONNECT.register((handler, _) ->
@@ -165,21 +135,21 @@ public final class ModNetworking {
                     continue;
                 }
 
-                if (!playerHasAtlasInInventory(player)) {
+                if (playerLacksAtlasInInventory(player)) {
                     clearPinnedWaypoints(player);
                 }
             }
         });
     }
 
-    private static boolean playerHasAtlasInInventory(net.minecraft.server.level.ServerPlayer player) {
+    private static boolean playerLacksAtlasInInventory(net.minecraft.server.level.ServerPlayer player) {
         int size = player.getInventory().getContainerSize();
         for (int i = 0; i < size; i++) {
             if (player.getInventory().getItem(i).is(ModItems.ATLAS)) {
-                return true;
+                return false;
             }
         }
-        return false;
+        return true;
     }
 
     private static void clearPinnedWaypoints(net.minecraft.server.level.ServerPlayer player) {
@@ -188,9 +158,58 @@ public final class ModNetworking {
             return;
         }
 
-        removedNavigationIds.forEach(waypointId ->
-                player.connection.send(ClientboundTrackedWaypointPacket.removeWaypoint(waypointId))
-        );
+        removedNavigationIds.forEach(waypointId -> sendRemovedPinnedWaypoint(player, waypointId));
+    }
+
+    private static boolean addPinnedWaypoint(UUID playerId, UUID waypointId) {
+        return PINNED_NAVIGATION_IDS.computeIfAbsent(playerId, _ -> new HashSet<>()).add(waypointId);
+    }
+
+    private static boolean removePinnedWaypoint(UUID playerId, UUID waypointId) {
+        Set<UUID> pinnedIds = PINNED_NAVIGATION_IDS.get(playerId);
+        if (pinnedIds == null || !pinnedIds.remove(waypointId)) {
+            return false;
+        }
+
+        if (pinnedIds.isEmpty()) {
+            PINNED_NAVIGATION_IDS.remove(playerId);
+        }
+        return true;
+    }
+
+    private static void sendPinnedWaypoint(net.minecraft.server.level.ServerPlayer player, UUID waypointId, Waypoint.Icon icon, BlockPos pos) {
+        player.connection.send(ClientboundTrackedWaypointPacket.addWaypointPosition(waypointId, icon, pos));
+    }
+
+    private static void sendRemovedPinnedWaypoint(net.minecraft.server.level.ServerPlayer player, UUID waypointId) {
+        player.connection.send(ClientboundTrackedWaypointPacket.removeWaypoint(waypointId));
+    }
+
+    private static void reconcilePinnedWaypoints(
+            net.minecraft.server.level.ServerPlayer player,
+            List<AtlasContents.WaypointData> sanitizedWaypoints
+    ) {
+        Set<UUID> pinnedIds = PINNED_NAVIGATION_IDS.get(player.getUUID());
+        if (pinnedIds == null || pinnedIds.isEmpty()) {
+            return;
+        }
+
+        Set<UUID> validWaypointIds = new HashSet<>();
+        for (AtlasContents.WaypointData waypoint : sanitizedWaypoints) {
+            validWaypointIds.add(WaypointIconCatalog.navigationWaypointId(waypoint.worldX(), waypoint.worldZ()));
+        }
+
+        List<UUID> stalePinnedIds = pinnedIds.stream()
+                .filter(id -> !validWaypointIds.contains(id))
+                .toList();
+        if (stalePinnedIds.isEmpty()) {
+            return;
+        }
+
+        for (UUID staleId : stalePinnedIds) {
+            sendRemovedPinnedWaypoint(player, staleId);
+            removePinnedWaypoint(player.getUUID(), staleId);
+        }
     }
 
     private static List<AtlasContents.WaypointData> sanitizeWaypoints(List<AtlasContents.WaypointData> waypoints) {

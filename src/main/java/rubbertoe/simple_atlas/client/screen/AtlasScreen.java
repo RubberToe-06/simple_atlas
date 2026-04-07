@@ -358,6 +358,12 @@ public class AtlasScreen extends Screen {
         contextMenuWorldPoint = null;
     }
 
+    private void positionContextMenu(double mouseX, double mouseY, int rowCount) {
+        int menuHeight = WAYPOINT_CONTEXT_MENU_ROW_HEIGHT * rowCount;
+        contextMenuX = Mth.clamp((int) mouseX, 4, Math.max(4, this.width - WAYPOINT_CONTEXT_MENU_WIDTH - 4));
+        contextMenuY = Mth.clamp((int) mouseY, 4, Math.max(4, this.height - menuHeight - 4));
+    }
+
     private int getContextMenuRowCount() {
         if (contextMenuWaypointIndex >= 0) {
             return WAYPOINT_CONTEXT_MENU_WAYPOINT_ROWS;
@@ -374,17 +380,13 @@ public class AtlasScreen extends Screen {
     private void openWaypointContextMenu(int waypointIndex, double mouseX, double mouseY) {
         contextMenuWaypointIndex = waypointIndex;
         contextMenuWorldPoint = null;
-        int menuHeight = WAYPOINT_CONTEXT_MENU_ROW_HEIGHT * getContextMenuRowCount();
-        contextMenuX = Mth.clamp((int) mouseX, 4, Math.max(4, this.width - WAYPOINT_CONTEXT_MENU_WIDTH - 4));
-        contextMenuY = Mth.clamp((int) mouseY, 4, Math.max(4, this.height - menuHeight - 4));
+        positionContextMenu(mouseX, mouseY, WAYPOINT_CONTEXT_MENU_WAYPOINT_ROWS);
     }
 
     private void openNewWaypointContextMenu(WorldPoint worldPoint, double mouseX, double mouseY) {
         contextMenuWaypointIndex = -1;
         contextMenuWorldPoint = worldPoint;
-        int menuHeight = WAYPOINT_CONTEXT_MENU_ROW_HEIGHT * getContextMenuRowCount();
-        contextMenuX = Mth.clamp((int) mouseX, 4, Math.max(4, this.width - WAYPOINT_CONTEXT_MENU_WIDTH - 4));
-        contextMenuY = Mth.clamp((int) mouseY, 4, Math.max(4, this.height - menuHeight - 4));
+        positionContextMenu(mouseX, mouseY, WAYPOINT_CONTEXT_MENU_MAP_ROWS);
     }
 
     private int getContextMenuOptionAt(double mouseX, double mouseY) {
@@ -425,12 +427,26 @@ public class AtlasScreen extends Screen {
         return -1;
     }
 
-    private void beginEditWaypoint(int waypointIndex) {
+    private AtlasContents.WaypointData getWaypoint(int waypointIndex) {
         if (waypointIndex < 0 || waypointIndex >= atlasWaypoints.size()) {
+            return null;
+        }
+        return atlasWaypoints.get(waypointIndex);
+    }
+
+    private @Nullable AtlasIcon getWaypointAtlasIcon(int waypointIndex) {
+        int iconListIndex = waypointIndex + 1;
+        if (waypointIndex < 0 || iconListIndex >= atlasIcons.size()) {
+            return null;
+        }
+        return atlasIcons.get(iconListIndex);
+    }
+
+    private void beginEditWaypoint(int waypointIndex) {
+        AtlasContents.WaypointData waypoint = getWaypoint(waypointIndex);
+        if (waypoint == null) {
             return;
         }
-
-        AtlasContents.WaypointData waypoint = atlasWaypoints.get(waypointIndex);
         int iconIndex = waypointIconOptions.isEmpty() ? 0 : Math.floorMod(waypoint.iconIndex(), waypointIconOptions.size());
         this.selectedWaypointIconIndex = iconIndex;
         this.waypointDraft = new WaypointDraft(waypoint.worldX(), waypoint.worldZ(), waypoint.name(), iconIndex);
@@ -444,11 +460,10 @@ public class AtlasScreen extends Screen {
     }
 
     private void pinWaypointToLocatorBar(int waypointIndex) {
-        if (waypointIndex < 0 || waypointIndex >= atlasWaypoints.size()) {
+        AtlasContents.WaypointData waypoint = getWaypoint(waypointIndex);
+        if (waypoint == null) {
             return;
         }
-
-        AtlasContents.WaypointData waypoint = atlasWaypoints.get(waypointIndex);
         ClientPlayNetworking.send(new NavigateToWaypointPayload(
                 waypoint.worldX(),
                 waypoint.worldZ(),
@@ -457,15 +472,11 @@ public class AtlasScreen extends Screen {
     }
 
     private void unpinWaypointFromLocatorBar(int waypointIndex) {
-        if (waypointIndex < 0 || waypointIndex >= atlasWaypoints.size()) {
+        AtlasContents.WaypointData waypoint = getWaypoint(waypointIndex);
+        if (waypoint == null) {
             return;
         }
-
-        AtlasContents.WaypointData waypoint = atlasWaypoints.get(waypointIndex);
-        ClientPlayNetworking.send(new UnpinWaypointPayload(
-                waypoint.worldX(),
-                waypoint.worldZ()
-        ));
+        unpinWaypointFromLocatorBar(waypoint);
     }
 
     private void unpinWaypointFromLocatorBar(AtlasContents.WaypointData waypoint) {
@@ -476,15 +487,14 @@ public class AtlasScreen extends Screen {
     }
 
     private boolean isWaypointPinnedToLocatorBar(int waypointIndex) {
-        if (waypointIndex < 0 || waypointIndex >= atlasWaypoints.size()) {
-            return false;
-        }
-
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.player == null) {
             return false;
         }
-        AtlasContents.WaypointData waypoint = atlasWaypoints.get(waypointIndex);
+        AtlasContents.WaypointData waypoint = getWaypoint(waypointIndex);
+        if (waypoint == null) {
+            return false;
+        }
         UUID navigationId = WaypointIconCatalog.navigationWaypointId(waypoint.worldX(), waypoint.worldZ());
         final boolean[] matched = {false};
         minecraft.player.connection.getWaypointManager().forEachWaypoint(minecraft.player, trackedWaypoint -> {
@@ -533,7 +543,10 @@ public class AtlasScreen extends Screen {
                 continue;
             }
 
-            AtlasIcon icon = atlasIcons.get(iconListIndex);
+            AtlasIcon icon = getWaypointAtlasIcon(i);
+            if (icon == null) {
+                continue;
+            }
             AtlasIcon.Anchor anchor = icon.resolveAnchor(minecraft, tiles, mapOriginX, mapOriginY, scaledTileSize);
             if (anchor == null) {
                 continue;
@@ -575,6 +588,53 @@ public class AtlasScreen extends Screen {
         atlasWaypoints.remove(waypointIndex);
         atlasIcons.remove(waypointIndex + 1);
         persistWaypointState();
+    }
+
+    private void clearWaypointDraft() {
+        waypointDraft = null;
+        editingWaypointIndex = -1;
+    }
+
+    private boolean commitWaypointDraft() {
+        if (waypointDraft == null) {
+            return false;
+        }
+
+        String name = waypointDraft.name.trim();
+        if (name.isEmpty()) {
+            name = "Waypoint " + nextWaypointNumber;
+        }
+
+        AtlasContents.WaypointData updatedWaypoint = new AtlasContents.WaypointData(
+                waypointDraft.worldX,
+                waypointDraft.worldZ,
+                name,
+                waypointDraft.iconIndex
+        );
+
+        if (editingWaypointIndex >= 0 && editingWaypointIndex < atlasWaypoints.size()) {
+            atlasWaypoints.set(editingWaypointIndex, updatedWaypoint);
+            atlasIcons.set(editingWaypointIndex + 1, createWaypointIcon(
+                    updatedWaypoint.worldX(),
+                    updatedWaypoint.worldZ(),
+                    Component.literal(updatedWaypoint.name()),
+                    updatedWaypoint.iconIndex()
+            ));
+        } else {
+            atlasWaypoints.add(updatedWaypoint);
+            atlasIcons.add(createWaypointIcon(
+                    updatedWaypoint.worldX(),
+                    updatedWaypoint.worldZ(),
+                    Component.literal(updatedWaypoint.name()),
+                    updatedWaypoint.iconIndex()
+            ));
+            nextWaypointNumber++;
+        }
+
+        selectedWaypointIconIndex = waypointDraft.iconIndex;
+        clearWaypointDraft();
+        persistWaypointState();
+        return true;
     }
 
     private void renderWaypointContextMenu(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
@@ -1126,48 +1186,12 @@ public class AtlasScreen extends Screen {
     public boolean keyPressed(@NonNull KeyEvent event) {
         if (waypointDraft != null) {
             if (event.key() == GLFW.GLFW_KEY_ESCAPE) {
-                waypointDraft = null;
-                editingWaypointIndex = -1;
+                clearWaypointDraft();
                 return true;
             }
 
             if (event.key() == GLFW.GLFW_KEY_ENTER || event.key() == GLFW.GLFW_KEY_KP_ENTER) {
-                String name = waypointDraft.name.trim();
-                if (name.isEmpty()) {
-                    name = "Waypoint " + nextWaypointNumber;
-                }
-
-                AtlasContents.WaypointData updatedWaypoint = new AtlasContents.WaypointData(
-                        waypointDraft.worldX,
-                        waypointDraft.worldZ,
-                        name,
-                        waypointDraft.iconIndex
-                );
-
-                if (editingWaypointIndex >= 0 && editingWaypointIndex < atlasWaypoints.size()) {
-                    atlasWaypoints.set(editingWaypointIndex, updatedWaypoint);
-                    atlasIcons.set(editingWaypointIndex + 1, createWaypointIcon(
-                            updatedWaypoint.worldX(),
-                            updatedWaypoint.worldZ(),
-                            Component.literal(updatedWaypoint.name()),
-                            updatedWaypoint.iconIndex()
-                    ));
-                } else {
-                    atlasWaypoints.add(updatedWaypoint);
-                    atlasIcons.add(createWaypointIcon(
-                            updatedWaypoint.worldX(),
-                            updatedWaypoint.worldZ(),
-                            Component.literal(updatedWaypoint.name()),
-                            updatedWaypoint.iconIndex()
-                    ));
-                    nextWaypointNumber++;
-                }
-
-                selectedWaypointIconIndex = waypointDraft.iconIndex;
-                waypointDraft = null;
-                editingWaypointIndex = -1;
-                persistWaypointState();
-                return true;
+                return commitWaypointDraft();
             }
 
             if (event.key() == GLFW.GLFW_KEY_BACKSPACE) {
