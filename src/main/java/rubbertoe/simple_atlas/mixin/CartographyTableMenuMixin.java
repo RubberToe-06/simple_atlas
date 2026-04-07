@@ -52,6 +52,18 @@ public abstract class CartographyTableMenuMixin {
             return;
         }
 
+        // ── Book + atlas → duplicate the atlas (costs 1 book) ────────────────
+        if (mapStack.is(Items.BOOK) && additionalStack.is(ModItems.ATLAS)) {
+            ItemStack result = additionalStack.copyWithCount(1);
+
+            if (!ItemStack.matches(result, resultStack)) {
+                this.resultContainer.setItem(2, result);
+                ((CartographyTableMenu) (Object) this).broadcastChanges();
+            }
+            ci.cancel();
+            return;
+        }
+
         // ── Filled map + atlas → add the filled map to the atlas ──────────────
         if (!mapStack.is(Items.FILLED_MAP) || !additionalStack.is(ModItems.ATLAS)) {
             return;
@@ -128,15 +140,9 @@ public abstract class CartographyTableMenuMixin {
         ItemStack stack = slot.getItem();
         ItemStack clicked = stack.copy();
 
-        // ── Blank map from inventory → slot 0 when atlas occupies slot 1 ──────
-        if (stack.is(Items.MAP) && slotIndex >= 3 && slotIndex < 39) {
-            Slot additionalSlot = ((CartographyTableMenu) (Object) this).slots.get(1);
-            if (additionalSlot.getItem().is(ModItems.ATLAS)) {
-                if (!((AbstractContainerMenuInvoker) this).simple_atlas$invokeMoveItemStackTo(stack, 0, 1, false)) {
-                    cir.setReturnValue(ItemStack.EMPTY);
-                    return;
-                }
-
+        // ── Blank map or book from inventory → slot 0 ────────────────────────
+        if ((stack.is(Items.MAP) || stack.is(Items.BOOK)) && slotIndex >= 3 && slotIndex < 39) {
+            if (((AbstractContainerMenuInvoker) this).simple_atlas$invokeMoveItemStackTo(stack, 0, 1, false)) {
                 if (stack.isEmpty()) {
                     slot.setByPlayer(ItemStack.EMPTY);
                 }
@@ -179,4 +185,3 @@ public abstract class CartographyTableMenuMixin {
         }
     }
 }
-
