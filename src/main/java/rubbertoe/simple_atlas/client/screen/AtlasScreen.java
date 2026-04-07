@@ -56,11 +56,12 @@ public class AtlasScreen extends Screen {
     private static final int WAYPOINT_TEXTURE_SIZE = 16;
     private static final int WAYPOINT_RENDER_SIZE = 12;
     private static final int WAYPOINT_NAME_MAX_LENGTH = 32;
-    private static final int WAYPOINT_PICKER_PREVIEW_SIZE = 18;
-    private static final int WAYPOINT_PICKER_STRIP_ICON_SIZE = 12;
-    private static final int WAYPOINT_PICKER_STRIP_VISIBLE = 7;
+    private static final int WAYPOINT_PICKER_PREVIEW_SIZE = 20;
+    private static final int WAYPOINT_PICKER_PANEL_WIDTH = 148;
+    private static final int WAYPOINT_PICKER_PANEL_HEIGHT = 90;
     private static final int WAYPOINT_PICKER_PADDING = 8;
     private static final int WAYPOINT_PICKER_ARROW_SIZE = 12;
+    private static final int WAYPOINT_PICKER_INPUT_HEIGHT = 16;
     private static final int WAYPOINT_CONTEXT_MENU_WIDTH = 116;
     private static final int WAYPOINT_CONTEXT_MENU_ROW_HEIGHT = 14;
     private static final int WAYPOINT_CONTEXT_MENU_ROWS = 3;
@@ -122,50 +123,58 @@ public class AtlasScreen extends Screen {
 
     private static List<WaypointIconOption> createWaypointIconOptions() {
         return List.of(
+                // Generic markers
+                createIconOption("home.png"),
+                createIconOption("nether_portal.png"),
+                createIconOption("red_x.png"),
+                createIconOption("target_point.png"),
+                createIconOption("target_x.png"),
+                createIconOption("skull.png"),
+
+                // Structures
+                createIconOption("jungle_temple.png"),
+                createIconOption("ocean_monument.png"),
+                createIconOption("plains_village.png"),
+                createIconOption("savanna_village.png"),
+                createIconOption("snowy_village.png"),
+                createIconOption("swamp_hut.png"),
+                createIconOption("taiga_village.png"),
+                createIconOption("trial_chambers.png"),
+                createIconOption("woodland_mansion.png"),
+
+                // Tools
                 createIconOption("axe.png"),
-                createIconOption("black_banner.png"),
-                createIconOption("blue_banner.png"),
-                createIconOption("brown_banner.png"),
+                createIconOption("pickaxe.png"),
+                createIconOption("shovel.png"),
+                createIconOption("sword.png"),
+
+                // Resources
                 createIconOption("coal.png"),
                 createIconOption("copper_ingot.png"),
-                createIconOption("cyan_banner.png"),
-                createIconOption("desert_village.png"),
                 createIconOption("diamond.png"),
                 createIconOption("emerald.png"),
                 createIconOption("gold_ingot.png"),
-                createIconOption("gray_banner.png"),
-                createIconOption("green_banner.png"),
-                createIconOption("home.png"),
                 createIconOption("iron_ingot.png"),
-                createIconOption("jungle_temple.png"),
                 createIconOption("lapis_lazuli.png"),
-                createIconOption("light_blue_banner.png"),
-                createIconOption("light_gray_banner.png"),
-                createIconOption("lime_banner.png"),
-                createIconOption("magenta_banner.png"),
-                createIconOption("nether_portal.png"),
-                createIconOption("ocean_monument.png"),
-                createIconOption("orange_banner.png"),
-                createIconOption("pickaxe.png"),
-                createIconOption("pink_banner.png"),
-                createIconOption("plains_village.png"),
-                createIconOption("purple_banner.png"),
                 createIconOption("redstone_dust.png"),
+
+                // Banners (rainbow order)
                 createIconOption("red_banner.png"),
-                createIconOption("red_x.png"),
-                createIconOption("savanna_village.png"),
-                createIconOption("shovel.png"),
-                createIconOption("skull.png"),
-                createIconOption("snowy_village.png"),
-                createIconOption("swamp_hut.png"),
-                createIconOption("sword.png"),
-                createIconOption("taiga_village.png"),
-                createIconOption("target_point.png"),
-                createIconOption("target_x.png"),
-                createIconOption("trial_chambers.png"),
+                createIconOption("orange_banner.png"),
+                createIconOption("yellow_banner.png"),
+                createIconOption("lime_banner.png"),
+                createIconOption("green_banner.png"),
+                createIconOption("cyan_banner.png"),
+                createIconOption("light_blue_banner.png"),
+                createIconOption("blue_banner.png"),
+                createIconOption("purple_banner.png"),
+                createIconOption("magenta_banner.png"),
+                createIconOption("pink_banner.png"),
                 createIconOption("white_banner.png"),
-                createIconOption("woodland_mansion.png"),
-                createIconOption("yellow_banner.png")
+                createIconOption("light_gray_banner.png"),
+                createIconOption("gray_banner.png"),
+                createIconOption("black_banner.png"),
+                createIconOption("brown_banner.png")
         );
     }
 
@@ -190,13 +199,15 @@ public class AtlasScreen extends Screen {
             int panelY,
             int panelX2,
             int panelY2,
-            int stripX,
-            int stripY,
-            int slotWidth,
-            int stripHalf,
+            int iconX,
+            int iconY,
             int leftArrowX,
             int rightArrowX,
-            int arrowY
+            int arrowY,
+            int inputX,
+            int inputY,
+            int inputX2,
+            int inputY2
     ) {}
 
     public static AtlasScreen fromPayload(OpenAtlasScreenPayload payload) {
@@ -751,13 +762,16 @@ public class AtlasScreen extends Screen {
         graphics.fill(layout.panelX(), layout.panelY(), layout.panelX() + 1, layout.panelY2(), 0xFF606060);
         graphics.fill(layout.panelX2() - 1, layout.panelY(), layout.panelX2(), layout.panelY2(), 0xFF606060);
 
-        int previewX = layout.panelX() + 6;
-        int previewY = layout.panelY() + 6;
+        String title = editingWaypointIndex >= 0 ? "Edit Waypoint" : "New Waypoint";
+        int titleX = layout.panelX() + (layout.panelX2() - layout.panelX() - this.font.width(title)) / 2;
+        graphics.textWithBackdrop(this.font, Component.literal(title), titleX, layout.panelY() + 6, this.font.width(title), 0xFFFFFFFF);
+
+        graphics.fill(layout.iconX() - 2, layout.iconY() - 2, layout.iconX() + WAYPOINT_PICKER_PREVIEW_SIZE + 2, layout.iconY() + WAYPOINT_PICKER_PREVIEW_SIZE + 2, 0x70000000);
         graphics.blit(
                 RenderPipelines.GUI_TEXTURED,
                 option.texture(),
-                previewX,
-                previewY,
+                layout.iconX(),
+                layout.iconY(),
                 0.0f,
                 0.0f,
                 WAYPOINT_PICKER_PREVIEW_SIZE,
@@ -768,71 +782,61 @@ public class AtlasScreen extends Screen {
                 WAYPOINT_TEXTURE_SIZE
         );
 
-        String title = option.name() + "  (" + (waypointDraft.iconIndex + 1) + "/" + waypointIconOptions.size() + ")";
-        String namePrompt = "Name: " + waypointDraft.name + "_";
-
-        int textX = previewX + WAYPOINT_PICKER_PREVIEW_SIZE + 6;
-        graphics.textWithBackdrop(this.font, Component.literal(title), textX, previewY + 2, this.font.width(title), 0xFFFFFFFF);
-        graphics.textWithBackdrop(this.font, Component.literal(namePrompt), layout.panelX() + 6, previewY + WAYPOINT_PICKER_PREVIEW_SIZE + 4, this.font.width(namePrompt), 0xFFFFFFFF);
-
-        for (int i = 0; i < WAYPOINT_PICKER_STRIP_VISIBLE; i++) {
-            int optionIndex = Math.floorMod(waypointDraft.iconIndex + (i - layout.stripHalf()), waypointIconOptions.size());
-            WaypointIconOption stripOption = waypointIconOptions.get(optionIndex);
-            int slotX = layout.stripX() + i * layout.slotWidth();
-
-            int slotColor = optionIndex == waypointDraft.iconIndex ? 0xA0FFFFFF : 0x50000000;
-            graphics.fill(slotX, layout.stripY(), slotX + WAYPOINT_PICKER_STRIP_ICON_SIZE + 2, layout.stripY() + WAYPOINT_PICKER_STRIP_ICON_SIZE + 2, slotColor);
-            graphics.blit(
-                    RenderPipelines.GUI_TEXTURED,
-                    stripOption.texture(),
-                    slotX + 1,
-                    layout.stripY() + 1,
-                    0.0f,
-                    0.0f,
-                    WAYPOINT_PICKER_STRIP_ICON_SIZE,
-                    WAYPOINT_PICKER_STRIP_ICON_SIZE,
-                    WAYPOINT_TEXTURE_SIZE,
-                    WAYPOINT_TEXTURE_SIZE,
-                    WAYPOINT_TEXTURE_SIZE,
-                    WAYPOINT_TEXTURE_SIZE
-            );
-        }
-
         int arrowY2 = layout.arrowY() + WAYPOINT_PICKER_ARROW_SIZE;
         graphics.fill(layout.leftArrowX(), layout.arrowY(), layout.leftArrowX() + WAYPOINT_PICKER_ARROW_SIZE, arrowY2, 0x70000000);
         graphics.fill(layout.rightArrowX(), layout.arrowY(), layout.rightArrowX() + WAYPOINT_PICKER_ARROW_SIZE, arrowY2, 0x70000000);
         graphics.textWithBackdrop(this.font, Component.literal("<"), layout.leftArrowX() + 3, layout.arrowY() + 2, this.font.width("<"), 0xFFFFFFFF);
         graphics.textWithBackdrop(this.font, Component.literal(">"), layout.rightArrowX() + 3, layout.arrowY() + 2, this.font.width(">"), 0xFFFFFFFF);
+
+
+        graphics.fill(layout.inputX(), layout.inputY(), layout.inputX2(), layout.inputY2(), 0x90000000);
+        graphics.fill(layout.inputX(), layout.inputY(), layout.inputX2(), layout.inputY() + 1, 0xFF505050);
+        graphics.fill(layout.inputX(), layout.inputY2() - 1, layout.inputX2(), layout.inputY2(), 0xFF505050);
+        graphics.fill(layout.inputX(), layout.inputY(), layout.inputX() + 1, layout.inputY2(), 0xFF505050);
+        graphics.fill(layout.inputX2() - 1, layout.inputY(), layout.inputX2(), layout.inputY2(), 0xFF505050);
+
+        String draftName = waypointDraft.name;
+        if (draftName.length() > WAYPOINT_NAME_MAX_LENGTH) {
+            draftName = draftName.substring(0, WAYPOINT_NAME_MAX_LENGTH);
+        }
+        String inputText = draftName.isEmpty() ? "Waypoint name_" : draftName + "_";
+        int inputColor = draftName.isEmpty() ? 0xFFB0B0B0 : 0xFFFFFFFF;
+        graphics.textWithBackdrop(this.font, Component.literal(inputText), layout.inputX() + 5, layout.inputY() + 4, this.font.width(inputText), inputColor);
     }
 
     private WaypointPickerLayout getWaypointPickerLayout(AtlasViewport viewport) {
-        int panelX = (int) Math.floor(viewport.contentX()) + WAYPOINT_PICKER_PADDING;
+        int panelWidth = Math.min(WAYPOINT_PICKER_PANEL_WIDTH, (int) Math.floor(viewport.contentWidth()) - WAYPOINT_PICKER_PADDING * 2);
+        int panelX = (int) Math.floor(viewport.contentX() + (viewport.contentWidth() - panelWidth) / 2.0f);
         int panelY = (int) Math.floor(viewport.contentY()) + WAYPOINT_PICKER_PADDING;
-        int panelWidth = (int) Math.floor(viewport.contentWidth()) - WAYPOINT_PICKER_PADDING * 2;
-        int panelHeight = WAYPOINT_PICKER_PREVIEW_SIZE + WAYPOINT_PICKER_STRIP_ICON_SIZE + this.font.lineHeight + 18;
         int panelX2 = panelX + panelWidth;
-        int panelY2 = panelY + panelHeight;
+        int panelY2 = panelY + WAYPOINT_PICKER_PANEL_HEIGHT;
 
-        int stripY = panelY + 6 + WAYPOINT_PICKER_PREVIEW_SIZE + this.font.lineHeight + 8;
-        int slotWidth = WAYPOINT_PICKER_STRIP_ICON_SIZE + 4;
-        int stripTotalWidth = WAYPOINT_PICKER_STRIP_VISIBLE * slotWidth;
-        int stripX = panelX + Math.max(6, (panelWidth - stripTotalWidth) / 2);
-        int stripHalf = WAYPOINT_PICKER_STRIP_VISIBLE / 2;
-        int leftArrowX = stripX - WAYPOINT_PICKER_ARROW_SIZE - 4;
-        int rightArrowX = stripX + stripTotalWidth + 2;
+        int iconX = panelX + (panelWidth - WAYPOINT_PICKER_PREVIEW_SIZE) / 2;
+        int iconY = panelY + 20;
+        int arrowY = iconY + (WAYPOINT_PICKER_PREVIEW_SIZE - WAYPOINT_PICKER_ARROW_SIZE) / 2;
+        int leftArrowX = iconX - WAYPOINT_PICKER_ARROW_SIZE - 8;
+        int rightArrowX = iconX + WAYPOINT_PICKER_PREVIEW_SIZE + 8;
+
+        int inputWidth = panelWidth - 16;
+        int inputX = panelX + (panelWidth - inputWidth) / 2;
+        int inputY = panelY2 - WAYPOINT_PICKER_INPUT_HEIGHT - 8;
+        int inputX2 = inputX + inputWidth;
+        int inputY2 = inputY + WAYPOINT_PICKER_INPUT_HEIGHT;
 
         return new WaypointPickerLayout(
                 panelX,
                 panelY,
                 panelX2,
                 panelY2,
-                stripX,
-                stripY,
-                slotWidth,
-                stripHalf,
+                iconX,
+                iconY,
                 leftArrowX,
                 rightArrowX,
-                stripY
+                arrowY,
+                inputX,
+                inputY,
+                inputX2,
+                inputY2
         );
     }
 
@@ -938,22 +942,10 @@ public class AtlasScreen extends Screen {
                     cycleSelectedWaypointIcon(1);
                     return true;
                 }
-
-                for (int i = 0; i < WAYPOINT_PICKER_STRIP_VISIBLE; i++) {
-                    int slotX = layout.stripX() + i * layout.slotWidth();
-                    int slotX2 = slotX + WAYPOINT_PICKER_STRIP_ICON_SIZE + 2;
-                    int slotY = layout.stripY();
-                    int slotY2 = slotY + WAYPOINT_PICKER_STRIP_ICON_SIZE + 2;
-                    if (event.x() < slotX || event.x() >= slotX2 || event.y() < slotY || event.y() >= slotY2) {
-                        continue;
-                    }
-
-                    int optionIndex = Math.floorMod(waypointDraft.iconIndex + (i - layout.stripHalf()), waypointIconOptions.size());
-                    waypointDraft.iconIndex = optionIndex;
-                    selectedWaypointIconIndex = optionIndex;
-                    return true;
-                }
             }
+
+            // Keep interactions focused on the draft UI until the user confirms/cancels.
+            return true;
         }
 
         if (isContextMenuOpen()) {
