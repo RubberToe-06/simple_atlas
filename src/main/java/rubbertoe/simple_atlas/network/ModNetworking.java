@@ -1,6 +1,7 @@
 package rubbertoe.simple_atlas.network;
 
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.core.BlockPos;
@@ -110,6 +111,11 @@ public final class ModNetworking {
                 NavigateToWaypointPayload.TYPE,
                 (payload, context) -> context.server().execute(() -> {
                     var player = context.player();
+                    if (!playerHasAtlasInInventory(player)) {
+                        clearPinnedWaypoints(player);
+                        return;
+                    }
+
                     UUID playerId = player.getUUID();
                     UUID newNavigationId = WaypointIconCatalog.navigationWaypointId(payload.worldX(), payload.worldZ());
 
@@ -128,17 +134,7 @@ public final class ModNetworking {
         );
         ServerPlayNetworking.registerGlobalReceiver(
                 StopNavigatingPayload.TYPE,
-                (_, context) -> context.server().execute(() -> {
-                    var player = context.player();
-                    Set<UUID> removedNavigationIds = PINNED_NAVIGATION_IDS.remove(player.getUUID());
-                    if (removedNavigationIds == null) {
-                        return;
-                    }
-
-                    removedNavigationIds.forEach(waypointId ->
-                            player.connection.send(ClientboundTrackedWaypointPacket.removeWaypoint(waypointId))
-                    );
-                })
+                (_, context) -> context.server().execute(() -> clearPinnedWaypoints(context.player()))
         );
         ServerPlayNetworking.registerGlobalReceiver(
                 UnpinWaypointPayload.TYPE,
@@ -160,6 +156,40 @@ public final class ModNetworking {
         );
         ServerPlayConnectionEvents.DISCONNECT.register((handler, _) ->
                 PINNED_NAVIGATION_IDS.remove(handler.player.getUUID())
+        );
+        ServerTickEvents.END_SERVER_TICK.register(server -> {
+            for (UUID playerId : new ArrayList<>(PINNED_NAVIGATION_IDS.keySet())) {
+                var player = server.getPlayerList().getPlayer(playerId);
+                if (player == null) {
+                    PINNED_NAVIGATION_IDS.remove(playerId);
+                    continue;
+                }
+
+                if (!playerHasAtlasInInventory(player)) {
+                    clearPinnedWaypoints(player);
+                }
+            }
+        });
+    }
+
+    private static boolean playerHasAtlasInInventory(net.minecraft.server.level.ServerPlayer player) {
+        int size = player.getInventory().getContainerSize();
+        for (int i = 0; i < size; i++) {
+            if (player.getInventory().getItem(i).is(ModItems.ATLAS)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static void clearPinnedWaypoints(net.minecraft.server.level.ServerPlayer player) {
+        Set<UUID> removedNavigationIds = PINNED_NAVIGATION_IDS.remove(player.getUUID());
+        if (removedNavigationIds == null || removedNavigationIds.isEmpty()) {
+            return;
+        }
+
+        removedNavigationIds.forEach(waypointId ->
+                player.connection.send(ClientboundTrackedWaypointPacket.removeWaypoint(waypointId))
         );
     }
 

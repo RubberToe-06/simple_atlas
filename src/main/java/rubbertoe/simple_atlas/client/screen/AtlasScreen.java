@@ -67,7 +67,7 @@ public class AtlasScreen extends Screen {
     private static final int WAYPOINT_PICKER_PADDING = 8;
     private static final int WAYPOINT_PICKER_ARROW_SIZE = 12;
     private static final int WAYPOINT_PICKER_INPUT_HEIGHT = 16;
-    private static final int WAYPOINT_CONTEXT_MENU_WIDTH = 116;
+    private static final int WAYPOINT_CONTEXT_MENU_WIDTH = 132;
     private static final int WAYPOINT_CONTEXT_MENU_ROW_HEIGHT = 14;
     private static final int WAYPOINT_CONTEXT_MENU_WAYPOINT_ROWS = 4;
     private static final int WAYPOINT_CONTEXT_MENU_MAP_ROWS = 2;
