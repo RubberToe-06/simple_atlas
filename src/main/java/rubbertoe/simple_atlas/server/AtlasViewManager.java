@@ -28,8 +28,4 @@ public final class AtlasViewManager {
         return ACTIVE_VIEWS.containsKey(player.getUUID());
     }
 
-    public static Iterable<Map.Entry<UUID, List<Integer>>> entries() {
-        return ACTIVE_VIEWS.entrySet();
-    }
-
 }

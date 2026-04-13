@@ -18,35 +18,10 @@ public class StaticAtlasIcon extends AtlasIcon {
             int renderWidth,
             int renderHeight,
             double worldX,
-            double worldZ
-    ) {
-        this(texture, textureWidth, textureHeight, renderWidth, renderHeight, worldX, worldZ, null, 0.0f);
-    }
-
-    public StaticAtlasIcon(
-            Identifier texture,
-            int textureWidth,
-            int textureHeight,
-            int renderWidth,
-            int renderHeight,
-            double worldX,
             double worldZ,
             @Nullable Component hoverTitle
     ) {
         this(texture, textureWidth, textureHeight, renderWidth, renderHeight, worldX, worldZ, hoverTitle, 0.0f);
-    }
-
-    public StaticAtlasIcon(
-            Identifier texture,
-            int textureWidth,
-            int textureHeight,
-            int renderWidth,
-            int renderHeight,
-            double worldX,
-            double worldZ,
-            float rotationRadians
-    ) {
-        this(texture, textureWidth, textureHeight, renderWidth, renderHeight, worldX, worldZ, null, rotationRadians);
     }
 
     public StaticAtlasIcon(
