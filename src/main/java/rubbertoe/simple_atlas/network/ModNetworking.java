@@ -24,7 +24,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 public final class ModNetworking {
-    private static final int MAX_WAYPOINT_COUNT = 256;
+    public static final int MAX_WAYPOINT_COUNT = 256;
     private static final Map<UUID, Set<UUID>> PINNED_NAVIGATION_IDS = new ConcurrentHashMap<>();
 
     private ModNetworking() {}

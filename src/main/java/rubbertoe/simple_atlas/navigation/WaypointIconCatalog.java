@@ -2,6 +2,7 @@ package rubbertoe.simple_atlas.navigation;
 
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.waypoints.WaypointStyleAsset;
 import net.minecraft.world.waypoints.WaypointStyleAssets;
 import rubbertoe.simple_atlas.SimpleAtlas;
@@ -65,6 +66,21 @@ public final class WaypointIconCatalog {
 
     public static int sanitizeIconIndex(int index) {
         return ICON_KEYS.isEmpty() ? 0 : Math.floorMod(index, ICON_KEYS.size());
+    }
+
+    public static int bannerIconIndexForColor(DyeColor color) {
+        if (ICON_KEYS.isEmpty()) {
+            return 0;
+        }
+
+        String bannerKey = color.getName() + "_banner";
+        int colorMatch = ICON_KEYS.indexOf(bannerKey);
+        if (colorMatch >= 0) {
+            return colorMatch;
+        }
+
+        int redFallback = ICON_KEYS.indexOf("red_banner");
+        return Math.max(redFallback, 0);
     }
 
     public static ResourceKey<WaypointStyleAsset> styleKeyForIndex(int iconIndex) {

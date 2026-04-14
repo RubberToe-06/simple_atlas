@@ -2,6 +2,7 @@ package rubbertoe.simple_atlas.item;
 
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.ChatFormatting;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.Packet;
@@ -17,7 +18,9 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.item.MapItem;
 import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.item.component.TooltipDisplay;
+import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.entity.BannerBlockEntity;
 import net.minecraft.world.level.saveddata.maps.MapId;
 import net.minecraft.world.level.saveddata.maps.MapItemSavedData;
 import org.jspecify.annotations.NonNull;
@@ -28,13 +31,72 @@ import rubbertoe.simple_atlas.layout.AtlasLayout;
 import rubbertoe.simple_atlas.layout.AtlasLayoutBuilder;
 import rubbertoe.simple_atlas.component.AtlasContents;
 import rubbertoe.simple_atlas.component.ModComponents;
+import rubbertoe.simple_atlas.navigation.WaypointIconCatalog;
 import rubbertoe.simple_atlas.network.AtlasTilePayload;
+import rubbertoe.simple_atlas.network.ModNetworking;
 import rubbertoe.simple_atlas.network.OpenAtlasScreenPayload;
 import rubbertoe.simple_atlas.server.AtlasViewManager;
 
 public class AtlasItem extends Item {
     public AtlasItem(Properties properties) {
         super(properties);
+    }
+
+    @Override
+    public @NonNull InteractionResult useOn(@NonNull UseOnContext context) {
+        Player player = context.getPlayer();
+        if (player == null || context.getHand() != InteractionHand.MAIN_HAND) {
+            return InteractionResult.PASS;
+        }
+
+        Level level = context.getLevel();
+        if (!(level.getBlockEntity(context.getClickedPos()) instanceof BannerBlockEntity banner)) {
+            return InteractionResult.PASS;
+        }
+
+        if (level.isClientSide()) {
+            return InteractionResult.SUCCESS;
+        }
+
+        ItemStack atlasStack = context.getItemInHand();
+        AtlasContents contents = atlasStack.getOrDefault(ModComponents.ATLAS_CONTENTS, AtlasContents.EMPTY);
+
+        if (contents.waypoints().size() >= ModNetworking.MAX_WAYPOINT_COUNT) {
+            player.sendSystemMessage(
+                    Component.literal("Atlas waypoint limit reached (" + ModNetworking.MAX_WAYPOINT_COUNT + ")")
+                            .withStyle(ChatFormatting.RED)
+            );
+            return InteractionResult.SUCCESS_SERVER;
+        }
+
+        BlockPos bannerPos = context.getClickedPos();
+        if (hasWaypointAtBlock(contents, bannerPos)) {
+            player.sendSystemMessage(
+                    Component.literal("This banner is already saved as a waypoint")
+                            .withStyle(ChatFormatting.GRAY)
+            );
+            return InteractionResult.SUCCESS_SERVER;
+        }
+
+        int bannerIconIndex = WaypointIconCatalog.bannerIconIndexForColor(banner.getBaseColor());
+        String customName = banner.getCustomName() != null ? banner.getCustomName().getString() : "";
+        String waypointName = customName.isBlank() ? "Banner " + contents.nextWaypointNumber() : customName;
+
+        AtlasContents.WaypointData waypoint = new AtlasContents.WaypointData(
+                bannerPos.getX() + 0.5,
+                bannerPos.getZ() + 0.5,
+                waypointName,
+                bannerIconIndex
+        );
+
+        AtlasContents updated = withAppendedWaypoint(contents, waypoint);
+        atlasStack.set(ModComponents.ATLAS_CONTENTS, updated);
+
+        player.sendSystemMessage(
+                Component.literal("Added banner waypoint: " + waypoint.name())
+                        .withStyle(ChatFormatting.GREEN)
+        );
+        return InteractionResult.SUCCESS_SERVER;
     }
 
     @Override
@@ -210,5 +272,24 @@ public class AtlasItem extends Item {
                 player.connection.send(packet);
             }
         }
+    }
+
+    private static boolean hasWaypointAtBlock(AtlasContents contents, BlockPos pos) {
+        for (AtlasContents.WaypointData waypoint : contents.waypoints()) {
+            if (Mth.floor(waypoint.worldX()) == pos.getX() && Mth.floor(waypoint.worldZ()) == pos.getZ()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static AtlasContents withAppendedWaypoint(AtlasContents contents, AtlasContents.WaypointData waypoint) {
+        var updatedWaypoints = new java.util.ArrayList<>(contents.waypoints());
+        updatedWaypoints.add(waypoint);
+        return contents.withWaypointState(
+                updatedWaypoints,
+                contents.selectedWaypointIconIndex(),
+                contents.nextWaypointNumber() + 1
+        );
     }
 }
