@@ -4,15 +4,18 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import com.mojang.datafixers.util.Either;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.CharacterEvent;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.client.renderer.state.MapRenderState;
+import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
 import net.minecraft.resources.Identifier;
+import net.minecraft.sounds.SoundEvents;
 import net.minecraft.world.level.saveddata.maps.MapId;
 import net.minecraft.world.level.saveddata.maps.MapItemSavedData;
 import org.jspecify.annotations.NonNull;
@@ -63,14 +66,14 @@ public class AtlasScreen extends Screen {
     private static final int WAYPOINT_NAME_MAX_LENGTH = 32;
     private static final int WAYPOINT_PICKER_PREVIEW_SIZE = 20;
     private static final int WAYPOINT_PICKER_PANEL_WIDTH = 148;
-    private static final int WAYPOINT_PICKER_PANEL_HEIGHT = 90;
+    private static final int WAYPOINT_PICKER_PANEL_HEIGHT = 105;
     private static final int WAYPOINT_PICKER_PADDING = 8;
     private static final int WAYPOINT_PICKER_ARROW_SIZE = 12;
     private static final int WAYPOINT_PICKER_INPUT_HEIGHT = 16;
     private static final int WAYPOINT_CONTEXT_MENU_WIDTH = 132;
     private static final int WAYPOINT_CONTEXT_MENU_ROW_HEIGHT = 14;
-    private static final int WAYPOINT_CONTEXT_MENU_WAYPOINT_ROWS = 4;
-    private static final int WAYPOINT_CONTEXT_MENU_MAP_ROWS = 2;
+    private static final int WAYPOINT_CONTEXT_MENU_WAYPOINT_ROWS = 5;
+    private static final int WAYPOINT_CONTEXT_MENU_MAP_ROWS = 3;
     private static final int ICON_HOVER_TITLE_PADDING = 4;
     private static final int GRID_DASH_LENGTH = 6;
     private static final int GRID_DASH_GAP = 4;
@@ -96,6 +99,7 @@ public class AtlasScreen extends Screen {
     private double panY = 0;
     private boolean leftDragging = false;
     private float zoom = 2.0f;
+    private @Nullable EditBox waypointNameEditBox = null;
     private static final float MIN_ZOOM = 0.25f;
     private static final float MAX_ZOOM = 4.0f;
     private static final float ZOOM_STEP = 1.1f;
@@ -161,7 +165,15 @@ public class AtlasScreen extends Screen {
             int inputX,
             int inputY,
             int inputX2,
-            int inputY2
+            int inputY2,
+            int confirmButtonX,
+            int confirmButtonY,
+            int confirmButtonX2,
+            int confirmButtonY2,
+            int cancelButtonX,
+            int cancelButtonY,
+            int cancelButtonX2,
+            int cancelButtonY2
     ) {}
 
     public static AtlasScreen fromPayload(OpenAtlasScreenPayload payload) {
@@ -216,6 +228,17 @@ public class AtlasScreen extends Screen {
     protected void init() {
         super.init();
         centerOnPlayerPosition();
+
+        // Play sound when atlas is opened
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.player != null) {
+            minecraft.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.BOOK_PAGE_TURN, 1.0f));
+        }
+
+        // Restore EditBox position if a waypoint draft was open (e.g. on resize)
+        if (waypointDraft != null) {
+            initWaypointEditBox(waypointDraft.name);
+        }
     }
 
     private record AtlasViewport(float x, float y, float width, float height, float contentX, float contentY, float contentWidth, float contentHeight) {}
@@ -366,21 +389,41 @@ public class AtlasScreen extends Screen {
 
     private int getContextMenuRowCount() {
         if (contextMenuWaypointIndex >= 0) {
-            return WAYPOINT_CONTEXT_MENU_WAYPOINT_ROWS;
+            return getWaypointContextMenuRowCount();
         }
         return contextMenuWorldPoint != null ? WAYPOINT_CONTEXT_MENU_MAP_ROWS : 0;
+    }
+
+    private int getWaypointContextMenuRowCount() {
+        return WAYPOINT_CONTEXT_MENU_WAYPOINT_ROWS;
+    }
+
+    private void teleportToLocation(double worldX, double worldZ) {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.player == null) {
+            return;
+        }
+
+        int blockX = Mth.floor(worldX);
+        int blockZ = Mth.floor(worldZ);
+        minecraft.player.connection.sendCommand("tp " + blockX + " ~ " + blockZ);
+        this.onClose();
     }
 
     private void copyCoordinatesToClipboard(double worldX, double worldZ) {
         int blockX = Mth.floor(worldX);
         int blockZ = Mth.floor(worldZ);
-        Minecraft.getInstance().keyboardHandler.setClipboard(blockX + ", " + blockZ);
+        Minecraft minecraft = Minecraft.getInstance();
+        minecraft.keyboardHandler.setClipboard(blockX + ", " + blockZ);
+        if (minecraft.player != null) {
+            minecraft.player.sendSystemMessage(Component.literal("Copied coordinates: " + blockX + ", " + blockZ));
+        }
     }
 
     private void openWaypointContextMenu(int waypointIndex, double mouseX, double mouseY) {
         contextMenuWaypointIndex = waypointIndex;
         contextMenuWorldPoint = null;
-        positionContextMenu(mouseX, mouseY, WAYPOINT_CONTEXT_MENU_WAYPOINT_ROWS);
+        positionContextMenu(mouseX, mouseY, getWaypointContextMenuRowCount());
     }
 
     private void openNewWaypointContextMenu(WorldPoint worldPoint, double mouseX, double mouseY) {
@@ -456,12 +499,14 @@ public class AtlasScreen extends Screen {
         this.selectedWaypointIconIndex = iconIndex;
         this.waypointDraft = new WaypointDraft(waypoint.worldX(), waypoint.worldZ(), waypoint.name(), iconIndex);
         this.editingWaypointIndex = waypointIndex;
+        initWaypointEditBox(waypoint.name());
     }
 
     private void beginNewWaypoint(WorldPoint worldPoint) {
         String defaultName = "Waypoint " + nextWaypointNumber;
         this.waypointDraft = new WaypointDraft(worldPoint.x(), worldPoint.z(), defaultName, selectedWaypointIconIndex);
         this.editingWaypointIndex = -1;
+        initWaypointEditBox(defaultName);
     }
 
     private void pinWaypointToLocatorBar(int waypointIndex) {
@@ -598,6 +643,39 @@ public class AtlasScreen extends Screen {
     private void clearWaypointDraft() {
         waypointDraft = null;
         editingWaypointIndex = -1;
+        if (waypointNameEditBox != null) {
+            waypointNameEditBox.setFocused(false);
+            waypointNameEditBox = null;
+        }
+    }
+
+    private void initWaypointEditBox(String initialValue) {
+        AtlasViewport viewport = getAtlasViewport();
+        WaypointPickerLayout layout = getWaypointPickerLayout(viewport);
+        int inputWidth = layout.inputX2() - layout.inputX();
+        int inputHeight = layout.inputY2() - layout.inputY();
+        waypointNameEditBox = new EditBox(
+                this.font,
+                layout.inputX(), layout.inputY(),
+                inputWidth, inputHeight,
+                Component.literal("Waypoint name")
+        );
+        waypointNameEditBox.setMaxLength(WAYPOINT_NAME_MAX_LENGTH);
+        waypointNameEditBox.setValue(initialValue);
+        waypointNameEditBox.moveCursorToEnd(false);
+        waypointNameEditBox.setFocused(true);
+        waypointNameEditBox.setResponder(value -> {
+            if (waypointDraft != null) {
+                waypointDraft.name = value;
+            }
+        });
+    }
+
+    private void playSelectionSound() {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.player != null) {
+            minecraft.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK, 1.0f));
+        }
     }
 
     private boolean commitWaypointDraft() {
@@ -668,12 +746,14 @@ public class AtlasScreen extends Screen {
             String firstAction = pinnedThisWaypoint ? "Stop Locating" : "Locate";
             int firstColor = pinnedThisWaypoint ? 0xFFFFB366 : 0xFF8FE0FF;
             graphics.textWithBackdrop(this.font, Component.literal(firstAction), contextMenuX + 6, contextMenuY + 3, this.font.width(firstAction), firstColor);
-            graphics.textWithBackdrop(this.font, Component.literal("Edit waypoint"), contextMenuX + 6, contextMenuY + WAYPOINT_CONTEXT_MENU_ROW_HEIGHT + 3, this.font.width("Edit waypoint"), 0xFFFFFFFF);
-            graphics.textWithBackdrop(this.font, Component.literal("Delete waypoint"), contextMenuX + 6, contextMenuY + WAYPOINT_CONTEXT_MENU_ROW_HEIGHT * 2 + 3, this.font.width("Delete waypoint"), 0xFFFF8080);
-            graphics.textWithBackdrop(this.font, Component.literal("Copy coordinates"), contextMenuX + 6, contextMenuY + WAYPOINT_CONTEXT_MENU_ROW_HEIGHT * 3 + 3, this.font.width("Copy coordinates"), 0xFFB8E8FF);
+            graphics.textWithBackdrop(this.font, Component.literal("Teleport"), contextMenuX + 6, contextMenuY + WAYPOINT_CONTEXT_MENU_ROW_HEIGHT + 3, this.font.width("Teleport"), 0xFFFF5EFF);
+            graphics.textWithBackdrop(this.font, Component.literal("Copy coordinates"), contextMenuX + 6, contextMenuY + WAYPOINT_CONTEXT_MENU_ROW_HEIGHT * 2 + 3, this.font.width("Copy coordinates"), 0xFFFFFFFF);
+            graphics.textWithBackdrop(this.font, Component.literal("Edit waypoint"), contextMenuX + 6, contextMenuY + WAYPOINT_CONTEXT_MENU_ROW_HEIGHT * 3 + 3, this.font.width("Edit waypoint"), 0xFFFFFFFF);
+            graphics.textWithBackdrop(this.font, Component.literal("Delete waypoint"), contextMenuX + 6, contextMenuY + WAYPOINT_CONTEXT_MENU_ROW_HEIGHT * 4 + 3, this.font.width("Delete waypoint"), 0xFFFF8080);
         } else {
-            graphics.textWithBackdrop(this.font, Component.literal("New waypoint"), contextMenuX + 6, contextMenuY + 3, this.font.width("New waypoint"), 0xFFFFFFFF);
-            graphics.textWithBackdrop(this.font, Component.literal("Copy coordinates"), contextMenuX + 6, contextMenuY + WAYPOINT_CONTEXT_MENU_ROW_HEIGHT + 3, this.font.width("Copy coordinates"), 0xFFB8E8FF);
+            graphics.textWithBackdrop(this.font, Component.literal("Teleport"), contextMenuX + 6, contextMenuY + 3, this.font.width("Teleport"), 0xFFFF5EFF);
+            graphics.textWithBackdrop(this.font, Component.literal("New waypoint"), contextMenuX + 6, contextMenuY + WAYPOINT_CONTEXT_MENU_ROW_HEIGHT + 3, this.font.width("New waypoint"), 0xFFFFFFFF);
+            graphics.textWithBackdrop(this.font, Component.literal("Copy coordinates"), contextMenuX + 6, contextMenuY + WAYPOINT_CONTEXT_MENU_ROW_HEIGHT * 2 + 3, this.font.width("Copy coordinates"), 0xFFFFFFFF);
         }
     }
 
@@ -882,7 +962,7 @@ public class AtlasScreen extends Screen {
         graphics.textWithBackdrop(this.font, hoveredIcon.title(), textX, textY, textWidth, 0xFFFFFFFF);
     }
 
-    private void renderWaypointDraftOverlay(GuiGraphicsExtractor graphics, AtlasViewport viewport) {
+    private void renderWaypointDraftOverlay(GuiGraphicsExtractor graphics, AtlasViewport viewport, int mouseX, int mouseY) {
         if (waypointDraft == null || waypointIconOptions.isEmpty()) {
             return;
         }
@@ -916,25 +996,81 @@ public class AtlasScreen extends Screen {
         );
 
         int arrowY2 = layout.arrowY() + WAYPOINT_PICKER_ARROW_SIZE;
-        graphics.fill(layout.leftArrowX(), layout.arrowY(), layout.leftArrowX() + WAYPOINT_PICKER_ARROW_SIZE, arrowY2, 0x70000000);
-        graphics.fill(layout.rightArrowX(), layout.arrowY(), layout.rightArrowX() + WAYPOINT_PICKER_ARROW_SIZE, arrowY2, 0x70000000);
-        graphics.textWithBackdrop(this.font, Component.literal("<"), layout.leftArrowX() + 3, layout.arrowY() + 2, this.font.width("<"), 0xFFFFFFFF);
-        graphics.textWithBackdrop(this.font, Component.literal(">"), layout.rightArrowX() + 3, layout.arrowY() + 2, this.font.width(">"), 0xFFFFFFFF);
+
+        // Check if arrows are hovered
+        boolean leftArrowHovered = mouseX >= layout.leftArrowX() && mouseX < layout.leftArrowX() + WAYPOINT_PICKER_ARROW_SIZE
+                && mouseY >= layout.arrowY() && mouseY < arrowY2;
+        boolean rightArrowHovered = mouseX >= layout.rightArrowX() && mouseX < layout.rightArrowX() + WAYPOINT_PICKER_ARROW_SIZE
+                && mouseY >= layout.arrowY() && mouseY < arrowY2;
+
+        int arrowBgColor = 0x70000000;
+        int arrowHoverColor = 0x70404040;
+
+        // Left arrow
+        int leftArrowBgColor = leftArrowHovered ? arrowHoverColor : arrowBgColor;
+        graphics.fill(layout.leftArrowX(), layout.arrowY(), layout.leftArrowX() + WAYPOINT_PICKER_ARROW_SIZE, arrowY2, leftArrowBgColor);
+        String leftArrowText = "<";
+        int leftArrowTextWidth = this.font.width(leftArrowText);
+        int leftArrowTextX = layout.leftArrowX() + (WAYPOINT_PICKER_ARROW_SIZE - leftArrowTextWidth) / 2;
+        int leftArrowTextY = layout.arrowY() + (WAYPOINT_PICKER_ARROW_SIZE - this.font.lineHeight) / 2 + 1;
+        graphics.textWithBackdrop(this.font, Component.literal(leftArrowText), leftArrowTextX, leftArrowTextY, leftArrowTextWidth, 0xFFFFFFFF);
+
+        // Right arrow
+        int rightArrowBgColor = rightArrowHovered ? arrowHoverColor : arrowBgColor;
+        graphics.fill(layout.rightArrowX(), layout.arrowY(), layout.rightArrowX() + WAYPOINT_PICKER_ARROW_SIZE, arrowY2, rightArrowBgColor);
+        String rightArrowText = ">";
+        int rightArrowTextWidth = this.font.width(rightArrowText);
+        int rightArrowTextX = layout.rightArrowX() + (WAYPOINT_PICKER_ARROW_SIZE - rightArrowTextWidth) / 2;
+        int rightArrowTextY = layout.arrowY() + (WAYPOINT_PICKER_ARROW_SIZE - this.font.lineHeight) / 2 + 1;
+        graphics.textWithBackdrop(this.font, Component.literal(rightArrowText), rightArrowTextX, rightArrowTextY, rightArrowTextWidth, 0xFFFFFFFF);
 
 
         graphics.fill(layout.inputX(), layout.inputY(), layout.inputX2(), layout.inputY2(), 0x90000000);
-        graphics.fill(layout.inputX(), layout.inputY(), layout.inputX2(), layout.inputY() + 1, 0xFF505050);
-        graphics.fill(layout.inputX(), layout.inputY2() - 1, layout.inputX2(), layout.inputY2(), 0xFF505050);
-        graphics.fill(layout.inputX(), layout.inputY(), layout.inputX() + 1, layout.inputY2(), 0xFF505050);
-        graphics.fill(layout.inputX2() - 1, layout.inputY(), layout.inputX2(), layout.inputY2(), 0xFF505050);
-
-        String draftName = waypointDraft.name;
-        if (draftName.length() > WAYPOINT_NAME_MAX_LENGTH) {
-            draftName = draftName.substring(0, WAYPOINT_NAME_MAX_LENGTH);
+        if (waypointNameEditBox != null) {
+            waypointNameEditBox.extractWidgetRenderState(graphics, mouseX, mouseY, 0f);
         }
-        String inputText = draftName.isEmpty() ? "Waypoint name_" : draftName + "_";
-        int inputColor = draftName.isEmpty() ? 0xFFB0B0B0 : 0xFFFFFFFF;
-        graphics.textWithBackdrop(this.font, Component.literal(inputText), layout.inputX() + 5, layout.inputY() + 4, this.font.width(inputText), inputColor);
+
+        // Render cancel and confirm buttons - matching arrow button style with hover effect
+        int buttonBgColor = 0x70000000;
+        int buttonHoverColor = 0x70404040;
+        int buttonBorderColor = 0xFF505050;
+        int buttonTextColor = 0xFFFFFFFF;
+
+        // Check if cancel button is hovered
+        boolean cancelHovered = mouseX >= layout.cancelButtonX() && mouseX < layout.cancelButtonX2()
+                && mouseY >= layout.cancelButtonY() && mouseY < layout.cancelButtonY2();
+        int cancelBgColor = cancelHovered ? buttonHoverColor : buttonBgColor;
+
+        // Cancel button (left) - Draw background
+        graphics.fill(layout.cancelButtonX(), layout.cancelButtonY(), layout.cancelButtonX2(), layout.cancelButtonY2(), cancelBgColor);
+        graphics.fill(layout.cancelButtonX(), layout.cancelButtonY(), layout.cancelButtonX2(), layout.cancelButtonY() + 1, buttonBorderColor);
+        graphics.fill(layout.cancelButtonX(), layout.cancelButtonY2() - 1, layout.cancelButtonX2(), layout.cancelButtonY2(), buttonBorderColor);
+        graphics.fill(layout.cancelButtonX(), layout.cancelButtonY(), layout.cancelButtonX() + 1, layout.cancelButtonY2(), buttonBorderColor);
+        graphics.fill(layout.cancelButtonX2() - 1, layout.cancelButtonY(), layout.cancelButtonX2(), layout.cancelButtonY2(), buttonBorderColor);
+
+        String cancelText = "Cancel";
+        int cancelTextWidth = this.font.width(cancelText);
+        int cancelTextX = layout.cancelButtonX() + (layout.cancelButtonX2() - layout.cancelButtonX() - cancelTextWidth) / 2;
+        int cancelTextY = layout.cancelButtonY() + (layout.cancelButtonY2() - layout.cancelButtonY() - this.font.lineHeight) / 2 + 1;
+        graphics.textWithBackdrop(this.font, Component.literal(cancelText), cancelTextX, cancelTextY, cancelTextWidth, buttonTextColor);
+
+        // Check if confirm button is hovered
+        boolean confirmHovered = mouseX >= layout.confirmButtonX() && mouseX < layout.confirmButtonX2()
+                && mouseY >= layout.confirmButtonY() && mouseY < layout.confirmButtonY2();
+        int confirmBgColor = confirmHovered ? buttonHoverColor : buttonBgColor;
+
+        // Confirm button (right) - Draw background
+        graphics.fill(layout.confirmButtonX(), layout.confirmButtonY(), layout.confirmButtonX2(), layout.confirmButtonY2(), confirmBgColor);
+        graphics.fill(layout.confirmButtonX(), layout.confirmButtonY(), layout.confirmButtonX2(), layout.confirmButtonY() + 1, buttonBorderColor);
+        graphics.fill(layout.confirmButtonX(), layout.confirmButtonY2() - 1, layout.confirmButtonX2(), layout.confirmButtonY2(), buttonBorderColor);
+        graphics.fill(layout.confirmButtonX(), layout.confirmButtonY(), layout.confirmButtonX() + 1, layout.confirmButtonY2(), buttonBorderColor);
+        graphics.fill(layout.confirmButtonX2() - 1, layout.confirmButtonY(), layout.confirmButtonX2(), layout.confirmButtonY2(), buttonBorderColor);
+
+        String confirmText = "Confirm";
+        int confirmTextWidth = this.font.width(confirmText);
+        int confirmTextX = layout.confirmButtonX() + (layout.confirmButtonX2() - layout.confirmButtonX() - confirmTextWidth) / 2;
+        int confirmTextY = layout.confirmButtonY() + (layout.confirmButtonY2() - layout.confirmButtonY() - this.font.lineHeight) / 2 + 1;
+        graphics.textWithBackdrop(this.font, Component.literal(confirmText), confirmTextX, confirmTextY, confirmTextWidth, buttonTextColor);
     }
 
     private WaypointPickerLayout getWaypointPickerLayout(AtlasViewport viewport) {
@@ -944,17 +1080,34 @@ public class AtlasScreen extends Screen {
         int panelX2 = panelX + panelWidth;
         int panelY2 = panelY + WAYPOINT_PICKER_PANEL_HEIGHT;
 
-        int iconX = panelX + (panelWidth - WAYPOINT_PICKER_PREVIEW_SIZE) / 2;
+        // Title area: panelY + 6 to panelY + 18 (12px height)
+
+        // Icon and arrows area starts at panelY + 20
         int iconY = panelY + 20;
+        int iconX = panelX + (panelWidth - WAYPOINT_PICKER_PREVIEW_SIZE) / 2;
         int arrowY = iconY + (WAYPOINT_PICKER_PREVIEW_SIZE - WAYPOINT_PICKER_ARROW_SIZE) / 2;
         int leftArrowX = iconX - WAYPOINT_PICKER_ARROW_SIZE - 8;
         int rightArrowX = iconX + WAYPOINT_PICKER_PREVIEW_SIZE + 8;
 
+        // Icon area ends at panelY + 40 (20px icon), so input starts at panelY + 48
         int inputWidth = panelWidth - 16;
         int inputX = panelX + (panelWidth - inputWidth) / 2;
-        int inputY = panelY2 - WAYPOINT_PICKER_INPUT_HEIGHT - 8;
+        int inputY = panelY + 48;
         int inputX2 = inputX + inputWidth;
         int inputY2 = inputY + WAYPOINT_PICKER_INPUT_HEIGHT;
+
+        // Input ends at panelY + 64, buttons start lower with more gap
+        int buttonHeight = 14;
+        int buttonWidth = 50;
+        int buttonGap = 6;
+        int totalButtonWidth = (buttonWidth * 2) + buttonGap;
+        int buttonsStartX = panelX + (panelWidth - totalButtonWidth) / 2;
+        int buttonsY = panelY + 72;
+        int buttonsY2 = buttonsY + buttonHeight;
+
+        int cancelButtonX2 = buttonsStartX + buttonWidth;
+        int confirmButtonX = cancelButtonX2 + buttonGap;
+        int confirmButtonX2 = confirmButtonX + buttonWidth;
 
         return new WaypointPickerLayout(
                 panelX,
@@ -969,7 +1122,15 @@ public class AtlasScreen extends Screen {
                 inputX,
                 inputY,
                 inputX2,
-                inputY2
+                inputY2,
+                confirmButtonX,
+                buttonsY,
+                confirmButtonX2,
+                buttonsY2,
+                buttonsStartX,
+                buttonsY,
+                cancelButtonX2,
+                buttonsY2
         );
     }
 
@@ -1010,7 +1171,7 @@ public class AtlasScreen extends Screen {
                             mouseY >= y &&
                             mouseY < y + scaledTileSize;
 
-            if (hovered) {
+            if (hovered && !isContextMenuOpen() && waypointDraft == null) {
                 int ix = (int) x;
                 int iy = (int) y;
                 int isize = (int) Math.ceil(scaledTileSize);
@@ -1027,6 +1188,11 @@ public class AtlasScreen extends Screen {
             if (atlasIcon == playerIcon) {
                 continue;
             }
+            // Skip rendering the waypoint icon we're currently editing, as we'll render the draft version instead
+            int iconListIndex = atlasIcons.indexOf(atlasIcon);
+            if (editingWaypointIndex >= 0 && iconListIndex == editingWaypointIndex + 1) {
+                continue;
+            }
             atlasIcon.render(graphics, minecraft, tiles, mapOriginX, mapOriginY, scaledTileSize);
         }
 
@@ -1041,17 +1207,85 @@ public class AtlasScreen extends Screen {
         // Draw the player marker last so it stays visible above waypoint markers.
         playerIcon.render(graphics, minecraft, tiles, mapOriginX, mapOriginY, scaledTileSize);
 
-        hoveredIcon = findHoveredIcon(minecraft, mapOriginX, mapOriginY, scaledTileSize, mouseX, mouseY);
-        if (hoveredIcon != null) {
-            renderHoveredIconTitle(graphics, viewport, hoveredIcon);
+        // Don't show hovered icon titles when the waypoint draft menu is open
+        if (waypointDraft == null) {
+            hoveredIcon = findHoveredIcon(minecraft, mapOriginX, mapOriginY, scaledTileSize, mouseX, mouseY);
+            if (hoveredIcon != null) {
+                renderHoveredIconTitle(graphics, viewport, hoveredIcon);
+            }
         }
 
-        renderWaypointDraftOverlay(graphics, viewport);
+        renderWaypointDraftOverlay(graphics, viewport, mouseX, mouseY);
 
         graphics.disableScissor();
 
         renderWaypointContextMenu(graphics, mouseX, mouseY);
     }
+
+    private void handleWaypointContextMenuOption(int option, int waypointIndex) {
+        if (option == 0) {
+            if (isWaypointPinnedToLocatorBar(waypointIndex)) {
+                unpinWaypointFromLocatorBar(waypointIndex);
+            } else {
+                pinWaypointToLocatorBar(waypointIndex);
+            }
+            return;
+        }
+
+        if (option == 1) {
+            AtlasContents.WaypointData waypoint = atlasWaypoints.get(waypointIndex);
+            teleportToLocation(waypoint.worldX(), waypoint.worldZ());
+            return;
+        }
+
+        if (option == 2) {
+            AtlasContents.WaypointData waypoint = atlasWaypoints.get(waypointIndex);
+            copyCoordinatesToClipboard(waypoint.worldX(), waypoint.worldZ());
+        } else if (option == 3) {
+            beginEditWaypoint(waypointIndex);
+        } else if (option == 4) {
+            deleteWaypoint(waypointIndex);
+        }
+    }
+
+    private void handleWorldPointContextMenuOption(int option, WorldPoint worldPoint) {
+        switch (option) {
+            case 0 -> teleportToLocation(worldPoint.x(), worldPoint.z());
+            case 1 -> beginNewWaypoint(worldPoint);
+            case 2 -> copyCoordinatesToClipboard(worldPoint.x(), worldPoint.z());
+            default -> {
+                // No-op: click was inside the menu frame but not on a valid option row.
+            }
+        }
+    }
+
+    private boolean handleContextMenuClick(@NonNull MouseButtonEvent event) {
+        int option = getContextMenuOptionAt(event.x(), event.y());
+        if (event.button() == 0) {
+            int waypointIndex = contextMenuWaypointIndex;
+            WorldPoint worldPoint = contextMenuWorldPoint;
+            closeContextMenu();
+
+            if (option >= 0) {
+                if (waypointIndex >= 0) {
+                    handleWaypointContextMenuOption(option, waypointIndex);
+                    playSelectionSound();
+                } else if (worldPoint != null) {
+                    handleWorldPointContextMenuOption(option, worldPoint);
+                    playSelectionSound();
+                }
+            }
+            return true;
+        }
+
+        if (event.button() == 1) {
+            closeContextMenu();
+            return option >= 0;
+        }
+
+        return false;
+    }
+
     @Override
     public boolean mouseClicked(@NonNull MouseButtonEvent event, boolean doubleClick) {
         if (waypointDraft != null) {
@@ -1059,60 +1293,45 @@ public class AtlasScreen extends Screen {
                 AtlasViewport viewport = getAtlasViewport();
                 WaypointPickerLayout layout = getWaypointPickerLayout(viewport);
 
+                // Check confirm button
+                if (event.x() >= layout.confirmButtonX() && event.x() < layout.confirmButtonX2()
+                        && event.y() >= layout.confirmButtonY() && event.y() < layout.confirmButtonY2()) {
+                    playSelectionSound();
+                    return commitWaypointDraft();
+                }
+
+                // Check cancel button
+                if (event.x() >= layout.cancelButtonX() && event.x() < layout.cancelButtonX2()
+                        && event.y() >= layout.cancelButtonY() && event.y() < layout.cancelButtonY2()) {
+                    playSelectionSound();
+                    clearWaypointDraft();
+                    return true;
+                }
+
                 if (event.x() >= layout.leftArrowX() && event.x() < layout.leftArrowX() + WAYPOINT_PICKER_ARROW_SIZE
                         && event.y() >= layout.arrowY() && event.y() < layout.arrowY() + WAYPOINT_PICKER_ARROW_SIZE) {
                     cycleSelectedWaypointIcon(-1);
+                    playSelectionSound();
                     return true;
                 }
 
                 if (event.x() >= layout.rightArrowX() && event.x() < layout.rightArrowX() + WAYPOINT_PICKER_ARROW_SIZE
                         && event.y() >= layout.arrowY() && event.y() < layout.arrowY() + WAYPOINT_PICKER_ARROW_SIZE) {
                     cycleSelectedWaypointIcon(1);
+                    playSelectionSound();
                     return true;
                 }
             }
 
             // Keep interactions focused on the draft UI until the user confirms/cancels.
+            if (waypointNameEditBox != null) {
+                waypointNameEditBox.mouseClicked(event, doubleClick);
+            }
             return true;
         }
 
-        if (isContextMenuOpen()) {
-            int option = getContextMenuOptionAt(event.x(), event.y());
-            if (event.button() == 0) {
-                int waypointIndex = contextMenuWaypointIndex;
-                WorldPoint worldPoint = contextMenuWorldPoint;
-                closeContextMenu();
-                if (waypointIndex >= 0) {
-                    if (option == 0) {
-                        if (isWaypointPinnedToLocatorBar(waypointIndex)) {
-                            unpinWaypointFromLocatorBar(waypointIndex);
-                        } else {
-                            pinWaypointToLocatorBar(waypointIndex);
-                        }
-                    } else if (option == 1) {
-                        beginEditWaypoint(waypointIndex);
-                    } else if (option == 2) {
-                        deleteWaypoint(waypointIndex);
-                    } else if (option == 3) {
-                        AtlasContents.WaypointData waypoint = atlasWaypoints.get(waypointIndex);
-                        copyCoordinatesToClipboard(waypoint.worldX(), waypoint.worldZ());
-                    }
-                } else if (worldPoint != null) {
-                    if (option == 0) {
-                        beginNewWaypoint(worldPoint);
-                    } else if (option == 1) {
-                        copyCoordinatesToClipboard(worldPoint.x(), worldPoint.z());
-                    }
-                }
-                return true;
-            }
-
-            if (event.button() == 1) {
-                closeContextMenu();
-                if (option >= 0) {
-                    return true;
-                }
-            }
+        if (isContextMenuOpen() && handleContextMenuClick(event)) {
+            return true;
         }
 
         if (event.button() == 1) {
@@ -1135,6 +1354,7 @@ public class AtlasScreen extends Screen {
 
                 if (hoveredWaypointIndex >= 0) {
                     openWaypointContextMenu(hoveredWaypointIndex, event.x(), event.y());
+                    playSelectionSound();
                     leftDragging = false;
                     return true;
                 }
@@ -1142,6 +1362,7 @@ public class AtlasScreen extends Screen {
                 WorldPoint worldPoint = screenToWorldPoint(event.x(), event.y(), mapOriginX, mapOriginY, scaledTileSize);
                 if (worldPoint != null && !waypointIconOptions.isEmpty()) {
                     openNewWaypointContextMenu(worldPoint, event.x(), event.y());
+                    playSelectionSound();
                     leftDragging = false;
                     return true;
                 }
@@ -1185,6 +1406,12 @@ public class AtlasScreen extends Screen {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+        // Close context menu if it's open
+        if (isContextMenuOpen()) {
+            closeContextMenu();
+            return true;
+        }
+
         float oldZoom = this.zoom;
         float newZoom;
         AtlasViewport viewport = getAtlasViewport();
@@ -1234,14 +1461,10 @@ public class AtlasScreen extends Screen {
                 return commitWaypointDraft();
             }
 
-            if (event.key() == GLFW.GLFW_KEY_BACKSPACE) {
-                if (!waypointDraft.name.isEmpty()) {
-                    waypointDraft.name = waypointDraft.name.substring(0, waypointDraft.name.length() - 1);
-                }
-                return true;
+            if (waypointNameEditBox != null) {
+                waypointNameEditBox.keyPressed(event);
             }
-
-            // While drafting, consume all other keys so typing only affects the name field.
+            // Consume all key events while the draft UI is open.
             return true;
         }
 
@@ -1269,15 +1492,9 @@ public class AtlasScreen extends Screen {
     @Override
     public boolean charTyped(@NonNull CharacterEvent event) {
         if (waypointDraft != null) {
-            if (!event.isAllowedChatCharacter()) {
-                return false;
+            if (waypointNameEditBox != null) {
+                return waypointNameEditBox.charTyped(event);
             }
-
-            if (waypointDraft.name.length() >= WAYPOINT_NAME_MAX_LENGTH) {
-                return true;
-            }
-
-            waypointDraft.name = waypointDraft.name + event.codepointAsString();
             return true;
         }
 
@@ -1289,10 +1506,3 @@ public class AtlasScreen extends Screen {
         return false;
     }
 }
-
-
-
-
-
-
-
