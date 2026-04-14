@@ -22,6 +22,10 @@ import rubbertoe.simple_atlas.component.AtlasContents;
 import rubbertoe.simple_atlas.component.ModComponents;
 import rubbertoe.simple_atlas.item.ModItems;
 
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
+
 @Mixin(CartographyTableMenu.class)
 public abstract class CartographyTableMenuMixin {
 
@@ -91,6 +95,49 @@ public abstract class CartographyTableMenuMixin {
 
             ci.cancel();
         }
+
+        // ── Atlas + atlas → merge contents (requires same size) ──────────────
+        if (mapStack.is(ModItems.ATLAS) && additionalStack.is(ModItems.ATLAS)) {
+            AtlasContents topContents = mapStack.getOrDefault(ModComponents.ATLAS_CONTENTS, AtlasContents.EMPTY);
+            AtlasContents bottomContents = additionalStack.getOrDefault(ModComponents.ATLAS_CONTENTS, AtlasContents.EMPTY);
+
+            if (topContents.size() != bottomContents.size()) {
+                simple_atlas$rejectAtlasResult();
+                ci.cancel();
+                return;
+            }
+
+            AtlasContents merged = simple_atlas$mergeAtlasContents(bottomContents, topContents);
+            ItemStack result = additionalStack.copyWithCount(1);
+            result.set(ModComponents.ATLAS_CONTENTS, merged);
+
+            if (!ItemStack.matches(result, resultStack)) {
+                this.resultContainer.setItem(2, result);
+                ((CartographyTableMenu) (Object) this).broadcastChanges();
+            }
+
+            ci.cancel();
+        }
+    }
+
+    @Unique
+    private static AtlasContents simple_atlas$mergeAtlasContents(AtlasContents base, AtlasContents incoming) {
+        LinkedHashSet<Integer> mergedMapIds = new LinkedHashSet<>(base.mapIds());
+        mergedMapIds.addAll(incoming.mapIds());
+
+        LinkedHashSet<AtlasContents.WaypointData> mergedWaypoints = new LinkedHashSet<>(base.waypoints());
+        mergedWaypoints.addAll(incoming.waypoints());
+
+        int selectedIcon = base.selectedWaypointIconIndex();
+        int nextWaypointNumber = Math.max(base.nextWaypointNumber(), incoming.nextWaypointNumber());
+
+        return new AtlasContents(
+                List.copyOf(mergedMapIds),
+                new ArrayList<>(mergedWaypoints),
+                selectedIcon,
+                nextWaypointNumber,
+                0
+        );
     }
 
     @Unique
@@ -135,9 +182,13 @@ public abstract class CartographyTableMenuMixin {
             }
         }
 
-        // ── Atlas from inventory → slot 1 ─────────────────────────────────────
+        // ── Atlas from inventory → slot 1, otherwise slot 0 (for atlas merge) ─
         if (stack.is(ModItems.ATLAS) && slotIndex >= 3 && slotIndex < 39) {
-            if (!((AbstractContainerMenuInvoker) this).simple_atlas$invokeMoveItemStackTo(stack, 1, 2, false)) {
+            boolean movedToAdditional = ((AbstractContainerMenuInvoker) this).simple_atlas$invokeMoveItemStackTo(stack, 1, 2, false);
+            boolean movedToTop = movedToAdditional
+                    || ((AbstractContainerMenuInvoker) this).simple_atlas$invokeMoveItemStackTo(stack, 0, 1, false);
+
+            if (!movedToTop) {
                 cir.setReturnValue(ItemStack.EMPTY);
                 return;
             }
