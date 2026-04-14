@@ -113,9 +113,9 @@ public class AtlasScreen extends Screen {
     private WaypointDraft waypointDraft;
     private int editingWaypointIndex = -1;
     private int contextMenuWaypointIndex = -1;
-    private @Nullable WorldPoint contextMenuWorldPoint;
     private int contextMenuX;
     private int contextMenuY;
+    private @Nullable WorldPoint contextMenuWorldPoint;
 
     // Overlay widgets
     private @Nullable EditBox waypointNameEditBox = null;
@@ -376,6 +376,11 @@ public class AtlasScreen extends Screen {
     }
 
     // ----- Camera + world/map transforms -----
+
+    public void resetPerspective() {
+        this.zoom = 1.0f;
+        centerOnPlayerPosition();
+    }
 
     private void centerOnPlayerPosition() {
         centerOnIcon(this.playerIcon);
@@ -1599,12 +1604,6 @@ public class AtlasScreen extends Screen {
 
         if (event.key() == GLFW.GLFW_KEY_ESCAPE && isContextMenuOpen()) {
             closeContextMenu();
-            return true;
-        }
-
-        if (event.key() == GLFW.GLFW_KEY_R) {
-            this.zoom = 1.0f;
-            centerOnPlayerPosition();
             return true;
         }
 

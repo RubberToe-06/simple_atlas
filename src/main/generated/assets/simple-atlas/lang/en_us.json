@@ -1,3 +1,5 @@
 {
-  "item.simple-atlas.map_atlas": "Atlas"
+  "item.simple-atlas.map_atlas": "Atlas",
+  "key.category.simple-atlas.atlas": "Simple Atlas",
+  "key.simple_atlas.reset_zoom": "Reset Zoom"
 }

@@ -17,5 +17,7 @@ public class SimpleAtlasLangProvider extends FabricLanguageProvider {
     @Override
     public void generateTranslations(HolderLookup.@NonNull Provider registryLookup, TranslationBuilder translationBuilder) {
         translationBuilder.add(ModItems.ATLAS, "Atlas");
+        translationBuilder.add("key.category.simple-atlas.atlas", "Simple Atlas");
+        translationBuilder.add("key.simple_atlas.reset_zoom", "Reset Zoom");
     }
 }
