@@ -1119,6 +1119,17 @@ public class AtlasScreen extends Screen {
         graphics.pose().popMatrix();
     }
 
+    private void renderHoveredTileHighlight(GuiGraphicsExtractor graphics, float x, float y, float scaledTileSize) {
+        graphics.pose().pushMatrix();
+        graphics.pose().translate(x, y);
+        graphics.pose().scale(scaledTileSize, scaledTileSize);
+
+        // Subtle translucent white wash.
+        graphics.fill(0, 0, 1, 1, 0x22FFFFFF);
+
+        graphics.pose().popMatrix();
+    }
+
     private void renderMapTile(GuiGraphicsExtractor graphics, int mapId, float x, float y, float scale) {
         Minecraft minecraft = Minecraft.getInstance();
 
@@ -1387,15 +1398,7 @@ public class AtlasScreen extends Screen {
                             mouseY < y + scaledTileSize;
 
             if (hovered && !isContextMenuOpen() && waypointDraft == null) {
-                int ix = (int) x;
-                int iy = (int) y;
-                int isize = (int) Math.ceil(scaledTileSize);
-
-                // subtle translucent white wash
-                graphics.fill(ix, iy, ix + isize, iy + isize, 0x22FFFFFF);
-
-                // faint outline
-                //graphics.outline(ix, iy, isize, isize, 0x66FFFFFF);
+                renderHoveredTileHighlight(graphics, x, y, scaledTileSize);
             }
         }
 
