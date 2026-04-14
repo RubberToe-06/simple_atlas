@@ -1,7 +1,6 @@
 package rubbertoe.simple_atlas.server;
 
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
-import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.server.MinecraftServer;
@@ -14,7 +13,6 @@ import net.minecraft.world.level.saveddata.maps.MapId;
 import net.minecraft.world.level.saveddata.maps.MapItemSavedData;
 import rubbertoe.simple_atlas.component.AtlasContents;
 import rubbertoe.simple_atlas.component.ModComponents;
-import rubbertoe.simple_atlas.item.AtlasItem;
 import rubbertoe.simple_atlas.item.ModItems;
 
 import java.util.List;
@@ -49,24 +47,13 @@ public final class AtlasViewTicker {
             }
 
             AtlasContents contents = atlasStack.getOrDefault(ModComponents.ATLAS_CONTENTS, AtlasContents.EMPTY);
-            if (contents.mapIds().isEmpty() && contents.blankMapCount() == 0) {
+            if (contents.mapIds().isEmpty()) {
                 continue;
             }
 
             ServerLevel level = player.level();
             Integer currentMapRawId = findCurrentMapIdForPlayer(player, contents.mapIds());
 
-            // Blank-map expansion only triggers while the atlas screen is open.
-            if (currentMapRawId == null && AtlasViewManager.isViewing(player)) {
-                AtlasContents expanded = AtlasItem.tryAppendBlankMapForPlayerPosition(level, player, atlasStack, contents);
-                if (expanded != null) {
-                    contents = expanded;
-                    AtlasViewManager.updateViewedMaps(player, contents.mapIds());
-                    AtlasItem.syncAtlasMapsToPlayer(player, level, contents);
-                    ServerPlayNetworking.send(player, AtlasItem.createOpenPayload(level, contents));
-                    currentMapRawId = findCurrentMapIdForPlayer(player, contents.mapIds());
-                }
-            }
 
             if (currentMapRawId == null) {
                 continue;

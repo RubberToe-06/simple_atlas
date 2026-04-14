@@ -35,23 +35,6 @@ public abstract class CartographyTableMenuMixin {
             ItemStack resultStack,
             CallbackInfo ci
     ) {
-        // ── Blank map(s) + atlas → store all blank maps into the atlas ────────
-        if (mapStack.is(Items.MAP) && additionalStack.is(ModItems.ATLAS)) {
-            AtlasContents blankContents = additionalStack.getOrDefault(
-                    ModComponents.ATLAS_CONTENTS, AtlasContents.EMPTY);
-
-            AtlasContents updated = blankContents.withAddedBlankMaps(mapStack.getCount());
-            ItemStack result = additionalStack.copyWithCount(1);
-            result.set(ModComponents.ATLAS_CONTENTS, updated);
-
-            if (!ItemStack.matches(result, resultStack)) {
-                this.resultContainer.setItem(2, result);
-                ((CartographyTableMenu) (Object) this).broadcastChanges();
-            }
-            ci.cancel();
-            return;
-        }
-
         // ── Book + atlas → duplicate the atlas (costs 1 book) ────────────────
         if (mapStack.is(Items.BOOK) && additionalStack.is(ModItems.ATLAS)) {
             ItemStack result = additionalStack.copyWithCount(1);
@@ -64,59 +47,50 @@ public abstract class CartographyTableMenuMixin {
             return;
         }
 
-        // ── Filled map + atlas → add the filled map to the atlas ──────────────
-        if (!mapStack.is(Items.FILLED_MAP) || !additionalStack.is(ModItems.ATLAS)) {
-            return;
-        }
-
-        MapId mapId = mapStack.get(DataComponents.MAP_ID);
-        if (mapId == null) {
-            simple_atlas$rejectAtlasResult();
-            ci.cancel();
-            return;
-        }
-
-        AtlasContents contents = additionalStack.getOrDefault(
-                ModComponents.ATLAS_CONTENTS,
-                AtlasContents.EMPTY
-        );
-
-        // Duplicate map IDs are rejected so atlas contents stay unique.
-        if (contents.contains(mapId.id())) {
-            simple_atlas$rejectAtlasResult();
-            ci.cancel();
-            return;
-        }
-
-        this.access.execute((level, _) -> {
-            MapItemSavedData newMapData = level.getMapData(mapId);
-            if (newMapData == null) {
+        // ── Filled map + atlas → add the map to the atlas ────────────────────
+        if (mapStack.is(Items.FILLED_MAP) && additionalStack.is(ModItems.ATLAS)) {
+            MapId mapId = mapStack.get(DataComponents.MAP_ID);
+            if (mapId == null) {
                 simple_atlas$rejectAtlasResult();
+                ci.cancel();
                 return;
             }
 
-            if (!contents.mapIds().isEmpty()) {
-                int originRawId = contents.mapIds().getFirst();
-                MapItemSavedData originMapData = level.getMapData(new MapId(originRawId));
+            AtlasContents contents = additionalStack.getOrDefault(ModComponents.ATLAS_CONTENTS, AtlasContents.EMPTY);
 
-                if (originMapData == null || originMapData.scale != newMapData.scale) {
+            if (contents.contains(mapId.id())) {
+                simple_atlas$rejectAtlasResult();
+                ci.cancel();
+                return;
+            }
+
+            this.access.execute((level, _) -> {
+                MapItemSavedData newMapData = level.getMapData(mapId);
+                if (newMapData == null) {
                     simple_atlas$rejectAtlasResult();
                     return;
                 }
-            }
 
-            AtlasContents updated = contents.withAdded(mapId.id());
+                if (!contents.mapIds().isEmpty()) {
+                    int originRawId = contents.mapIds().getFirst();
+                    MapItemSavedData originMapData = level.getMapData(new MapId(originRawId));
+                    if (originMapData == null || originMapData.scale != newMapData.scale) {
+                        simple_atlas$rejectAtlasResult();
+                        return;
+                    }
+                }
 
-            ItemStack result = additionalStack.copyWithCount(1);
-            result.set(ModComponents.ATLAS_CONTENTS, updated);
+                ItemStack result = additionalStack.copyWithCount(1);
+                result.set(ModComponents.ATLAS_CONTENTS, contents.withAdded(mapId.id()));
 
-            if (!ItemStack.matches(result, resultStack)) {
-                this.resultContainer.setItem(2, result);
-                ((CartographyTableMenu) (Object) this).broadcastChanges();
-            }
-        });
+                if (!ItemStack.matches(result, resultStack)) {
+                    this.resultContainer.setItem(2, result);
+                    ((CartographyTableMenu) (Object) this).broadcastChanges();
+                }
+            });
 
-        ci.cancel();
+            ci.cancel();
+        }
     }
 
     @Unique
@@ -140,8 +114,8 @@ public abstract class CartographyTableMenuMixin {
         ItemStack stack = slot.getItem();
         ItemStack clicked = stack.copy();
 
-        // ── Blank map or book from inventory → slot 0 ────────────────────────
-        if ((stack.is(Items.MAP) || stack.is(Items.BOOK)) && slotIndex >= 3 && slotIndex < 39) {
+        // ── Book from inventory → slot 0 ──────────────────────────────────────
+        if (stack.is(Items.BOOK) && slotIndex >= 3 && slotIndex < 39) {
             if (((AbstractContainerMenuInvoker) this).simple_atlas$invokeMoveItemStackTo(stack, 0, 1, false)) {
                 if (stack.isEmpty()) {
                     slot.setByPlayer(ItemStack.EMPTY);

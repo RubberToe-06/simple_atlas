@@ -3,7 +3,6 @@ package rubbertoe.simple_atlas.item;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.server.level.ServerLevel;
@@ -14,8 +13,6 @@ import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
-import net.minecraft.world.item.MapItem;
 import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.item.component.TooltipDisplay;
 import net.minecraft.world.item.context.UseOnContext;
@@ -24,7 +21,6 @@ import net.minecraft.world.level.block.entity.BannerBlockEntity;
 import net.minecraft.world.level.saveddata.maps.MapId;
 import net.minecraft.world.level.saveddata.maps.MapItemSavedData;
 import org.jspecify.annotations.NonNull;
-import org.jspecify.annotations.Nullable;
 
 import java.util.function.Consumer;
 import rubbertoe.simple_atlas.layout.AtlasLayout;
@@ -112,33 +108,20 @@ public class AtlasItem extends Item {
 
         if (contents.mapIds().isEmpty()) {
             tooltipComponents.accept(
-                    Component.literal(contents.blankMapCount() > 0
-                                    ? "No maps · Use atlas to create the first map"
-                                    : "No maps · Add filled maps or store blank maps")
+                    Component.literal("No maps inserted")
                             .withStyle(ChatFormatting.GRAY)
             );
         } else {
-            int count = contents.size();
-            tooltipComponents.accept(
-                    Component.literal("Maps: " + count)
-                            .withStyle(ChatFormatting.GRAY)
-            );
 
-            // TooltipContext.mapData() gives us map data directly — no level reference needed
             MapItemSavedData mapData = context.mapData(new MapId(contents.mapIds().getFirst()));
             if (mapData != null) {
+                int scaleLevel = mapData.scale;
+                int scaleRatio = 1 << scaleLevel;
                 tooltipComponents.accept(
-                        Component.literal("Scale: " + mapData.scale)
+                        Component.literal("Scale: "+"(1:" + scaleRatio + ")")
                                 .withStyle(ChatFormatting.GRAY)
                 );
             }
-        }
-
-        if (contents.blankMapCount() > 0) {
-            tooltipComponents.accept(
-                    Component.literal("Stored blank maps: " + contents.blankMapCount())
-                            .withStyle(ChatFormatting.GRAY)
-            );
         }
     }
 
@@ -160,33 +143,9 @@ public class AtlasItem extends Item {
                 AtlasContents.EMPTY
         );
 
-        ItemStack offhand = player.getOffhandItem();
-        if (offhand.is(Items.MAP)) {
-            int blankMapsAdded = offhand.getCount();
-            contents = contents.withAddedBlankMaps(blankMapsAdded);
-            atlasStack.set(ModComponents.ATLAS_CONTENTS, contents);
-
-            if (!player.getAbilities().instabuild) {
-                offhand.shrink(blankMapsAdded);
-            }
-
-            player.sendSystemMessage(
-                    Component.literal("Stored " + blankMapsAdded + " blank map" + (blankMapsAdded == 1 ? "" : "s") + " in the atlas")
-                            .withStyle(ChatFormatting.YELLOW)
-            );
-            return InteractionResult.SUCCESS;
-        }
-
-        if (contents.mapIds().isEmpty() && contents.blankMapCount() > 0 && player instanceof ServerPlayer serverPlayer) {
-            AtlasContents expanded = tryAppendBlankMapForPlayerPosition(serverLevel, serverPlayer, atlasStack, contents);
-            if (expanded != null) {
-                contents = expanded;
-            }
-        }
-
         if (contents.mapIds().isEmpty()) {
             player.sendSystemMessage(
-                    Component.literal("Your atlas has no maps. Add a filled map or store blank maps in it first")
+                    Component.literal("Your atlas has no maps inserted")
                             .withStyle(ChatFormatting.YELLOW)
             );
             return InteractionResult.SUCCESS;
@@ -200,42 +159,6 @@ public class AtlasItem extends Item {
         return InteractionResult.SUCCESS;
     }
 
-    public static @Nullable AtlasContents tryAppendBlankMapForPlayerPosition(
-            ServerLevel level,
-            ServerPlayer player,
-            ItemStack atlasStack,
-            AtlasContents contents
-    ) {
-        if (contents.blankMapCount() <= 0) {
-            return null;
-        }
-
-        int scale = 0;
-        if (!contents.mapIds().isEmpty()) {
-            MapItemSavedData firstMapData = level.getMapData(new MapId(contents.mapIds().getFirst()));
-            if (firstMapData == null) {
-                return null;
-            }
-            scale = firstMapData.scale;
-        }
-
-        ItemStack createdMap = MapItem.create(
-                level,
-                Mth.floor(player.getX()),
-                Mth.floor(player.getZ()),
-                (byte) scale,
-                true,
-                false
-        );
-        MapId createdMapId = createdMap.get(DataComponents.MAP_ID);
-        if (createdMapId == null) {
-            return null;
-        }
-
-        AtlasContents updated = contents.withConsumedBlankMap().withAdded(createdMapId.id());
-        atlasStack.set(ModComponents.ATLAS_CONTENTS, updated);
-        return updated;
-    }
 
     public static OpenAtlasScreenPayload createOpenPayload(ServerLevel level, AtlasContents contents) {
         AtlasLayout layout = AtlasLayoutBuilder.build(level, contents);
