@@ -411,6 +411,11 @@ public class AtlasScreen extends Screen {
             int mouseX,
             int mouseY
     ) {
+        AtlasIcon.Anchor playerAnchor = resolveHoveredAnchor(playerIcon, minecraft, mapOriginX, mapOriginY, scaledTileSize, mouseX, mouseY);
+        if (playerAnchor != null) {
+            return -1;
+        }
+
         for (int i = atlasWaypoints.size() - 1; i >= 0; i--) {
             int iconListIndex = i + 1;
             if (iconListIndex >= atlasIcons.size()) {
@@ -418,8 +423,8 @@ public class AtlasScreen extends Screen {
             }
 
             AtlasIcon icon = atlasIcons.get(iconListIndex);
-            AtlasIcon.Anchor anchor = icon.resolveAnchor(minecraft, tiles, mapOriginX, mapOriginY, scaledTileSize);
-            if (anchor != null && icon.containsPoint(anchor, mouseX, mouseY)) {
+            AtlasIcon.Anchor anchor = resolveHoveredAnchor(icon, minecraft, mapOriginX, mapOriginY, scaledTileSize, mouseX, mouseY);
+            if (anchor != null) {
                 return i;
             }
         }
@@ -789,6 +794,22 @@ public class AtlasScreen extends Screen {
 
     private record HoveredAtlasIcon(AtlasIcon icon, AtlasIcon.Anchor anchor, Component title) {}
 
+    private AtlasIcon.Anchor resolveHoveredAnchor(
+            AtlasIcon icon,
+            Minecraft minecraft,
+            float mapOriginX,
+            float mapOriginY,
+            float scaledTileSize,
+            int mouseX,
+            int mouseY
+    ) {
+        AtlasIcon.Anchor anchor = icon.resolveAnchor(minecraft, tiles, mapOriginX, mapOriginY, scaledTileSize);
+        if (anchor == null || !icon.containsPoint(anchor, mouseX, mouseY)) {
+            return null;
+        }
+        return anchor;
+    }
+
     private HoveredAtlasIcon findHoveredIcon(
             Minecraft minecraft,
             float mapOriginX,
@@ -797,10 +818,23 @@ public class AtlasScreen extends Screen {
             int mouseX,
             int mouseY
     ) {
+        AtlasIcon.Anchor playerAnchor = resolveHoveredAnchor(playerIcon, minecraft, mapOriginX, mapOriginY, scaledTileSize, mouseX, mouseY);
+        if (playerAnchor != null) {
+            Component playerTitle = playerIcon.resolveHoverTitle(minecraft);
+            if (playerTitle != null) {
+                return new HoveredAtlasIcon(playerIcon, playerAnchor, playerTitle);
+            }
+            return null;
+        }
+
         for (int i = atlasIcons.size() - 1; i >= 0; i--) {
             AtlasIcon icon = atlasIcons.get(i);
-            AtlasIcon.Anchor anchor = icon.resolveAnchor(minecraft, tiles, mapOriginX, mapOriginY, scaledTileSize);
-            if (anchor == null || !icon.containsPoint(anchor, mouseX, mouseY)) {
+            if (icon == playerIcon) {
+                continue;
+            }
+
+            AtlasIcon.Anchor anchor = resolveHoveredAnchor(icon, minecraft, mapOriginX, mapOriginY, scaledTileSize, mouseX, mouseY);
+            if (anchor == null) {
                 continue;
             }
 
@@ -990,6 +1024,9 @@ public class AtlasScreen extends Screen {
         }
 
         for (AtlasIcon atlasIcon : atlasIcons) {
+            if (atlasIcon == playerIcon) {
+                continue;
+            }
             atlasIcon.render(graphics, minecraft, tiles, mapOriginX, mapOriginY, scaledTileSize);
         }
 
@@ -1000,6 +1037,9 @@ public class AtlasScreen extends Screen {
             AtlasIcon draftIcon = createWaypointIcon(waypointDraft.worldX, waypointDraft.worldZ, draftTitle, waypointDraft.iconIndex);
             draftIcon.render(graphics, minecraft, tiles, mapOriginX, mapOriginY, scaledTileSize);
         }
+
+        // Draw the player marker last so it stays visible above waypoint markers.
+        playerIcon.render(graphics, minecraft, tiles, mapOriginX, mapOriginY, scaledTileSize);
 
         hoveredIcon = findHoveredIcon(minecraft, mapOriginX, mapOriginY, scaledTileSize, mouseX, mouseY);
         if (hoveredIcon != null) {
