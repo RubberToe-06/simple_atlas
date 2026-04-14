@@ -4,7 +4,6 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -14,8 +13,7 @@ import net.minecraft.world.level.saveddata.maps.MapItemSavedData;
 import rubbertoe.simple_atlas.component.AtlasContents;
 import rubbertoe.simple_atlas.component.ModComponents;
 import rubbertoe.simple_atlas.item.ModItems;
-
-import java.util.List;
+import rubbertoe.simple_atlas.map.AtlasMapSelector;
 
 public final class AtlasViewTicker {
     private static final int SYNC_INTERVAL_TICKS = 10;
@@ -35,70 +33,68 @@ public final class AtlasViewTicker {
         }
 
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-            ItemStack atlasStack = player.getMainHandItem();
-            boolean holdingAtlas = atlasStack.is(ModItems.ATLAS);
+            ItemStack mainHand = player.getMainHandItem();
+            ItemStack offHand = player.getOffhandItem();
+            boolean holdingAtlasInMainHand = mainHand.is(ModItems.ATLAS);
+            boolean holdingAtlas = holdingAtlasInMainHand || offHand.is(ModItems.ATLAS);
 
             // If the atlas left the main hand, close any open view.
-            if (!holdingAtlas) {
+            if (!holdingAtlasInMainHand) {
                 if (AtlasViewManager.isViewing(player)) {
                     AtlasViewManager.stopViewing(player);
                 }
+            }
+
+            if (!holdingAtlas) {
                 continue;
             }
 
-            AtlasContents contents = atlasStack.getOrDefault(ModComponents.ATLAS_CONTENTS, AtlasContents.EMPTY);
-            if (contents.mapIds().isEmpty()) {
+            // Regular held-map packets are already handled every tick in ServerPlayer.
+            // Keep ticker map packets only for the full atlas screen session.
+            if (!AtlasViewManager.isViewing(player)) {
                 continue;
             }
 
-            ServerLevel level = player.level();
-            Integer currentMapRawId = findCurrentMapIdForPlayer(player, contents.mapIds());
-
-
-            if (currentMapRawId == null) {
-                continue;
-            }
-
-            MapId mapId = new MapId(currentMapRawId);
-            MapItemSavedData mapData = level.getMapData(mapId);
-            if (mapData == null) {
-                continue;
-            }
-
-            // Mirror vanilla map update behavior whenever the atlas is held.
-            if (!mapData.locked) {
-                ((MapItem) Items.FILLED_MAP).update(player.level(), player, mapData);
-            }
-
-            mapData.getHoldingPlayer(player);
-            Packet<?> packet = mapData.getUpdatePacket(mapId, player);
-            if (packet != null) {
-                player.connection.send(packet);
-            }
+            sendCurrentHeldAtlasMapUpdate(player, mainHand);
+            sendCurrentHeldAtlasMapUpdate(player, offHand);
         }
     }
 
-    private static Integer findCurrentMapIdForPlayer(ServerPlayer player, List<Integer> mapIds) {
-        double x = player.getX();
-        double z = player.getZ();
-
-        for (int rawId : mapIds) {
-            MapItemSavedData mapData = player.level().getMapData(new MapId(rawId));
-            if (mapData == null) {
-                continue;
-            }
-
-            int scaleFactor = 1 << mapData.scale;
-            double mapMinX = mapData.centerX - 64.0 * scaleFactor;
-            double mapMinZ = mapData.centerZ - 64.0 * scaleFactor;
-            double mapMaxX = mapData.centerX + 64.0 * scaleFactor;
-            double mapMaxZ = mapData.centerZ + 64.0 * scaleFactor;
-
-            if (x >= mapMinX && x < mapMaxX && z >= mapMinZ && z < mapMaxZ) {
-                return rawId;
-            }
+    private static void sendCurrentHeldAtlasMapUpdate(ServerPlayer player, ItemStack stack) {
+        if (!stack.is(ModItems.ATLAS)) {
+            return;
         }
 
-        return null;
+        AtlasContents contents = stack.getOrDefault(ModComponents.ATLAS_CONTENTS, AtlasContents.EMPTY);
+        if (contents.mapIds().isEmpty()) {
+            return;
+        }
+
+        Integer currentMapRawId = AtlasMapSelector.findCurrentMapRawId(
+                player.level(),
+                player.getX(),
+                player.getZ(),
+                contents.mapIds()
+        );
+        if (currentMapRawId == null) {
+            return;
+        }
+
+        MapId mapId = new MapId(currentMapRawId);
+        MapItemSavedData mapData = player.level().getMapData(mapId);
+        if (mapData == null) {
+            return;
+        }
+
+        if (!mapData.locked) {
+            ((MapItem) Items.FILLED_MAP).update(player.level(), player, mapData);
+        }
+
+        mapData.getHoldingPlayer(player);
+        Packet<?> packet = mapData.getUpdatePacket(mapId, player);
+        Packet<?> augmentedPacket = AtlasWaypointDecorations.withAtlasWaypointDecorations(packet, mapData, contents);
+        if (augmentedPacket != null) {
+            player.connection.send(augmentedPacket);
+        }
     }
 }

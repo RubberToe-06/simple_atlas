@@ -1,0 +1,50 @@
+package rubbertoe.simple_atlas.mixin;
+
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.network.protocol.Packet;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.MapItem;
+import net.minecraft.world.level.saveddata.maps.MapId;
+import net.minecraft.world.level.saveddata.maps.MapItemSavedData;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import rubbertoe.simple_atlas.component.AtlasContents;
+import rubbertoe.simple_atlas.component.ModComponents;
+import rubbertoe.simple_atlas.item.ModItems;
+import rubbertoe.simple_atlas.server.AtlasWaypointDecorations;
+
+@Mixin(ServerPlayer.class)
+public abstract class ServerPlayerMixin {
+    @Inject(method = "synchronizeSpecialItemUpdates", at = @At("HEAD"), cancellable = true)
+    private void simple_atlas$augmentAtlasMapUpdatePackets(ItemStack itemStack, CallbackInfo ci) {
+        if (!itemStack.is(ModItems.ATLAS)) {
+            return;
+        }
+
+        ServerPlayer player = simple_atlas$self();
+        MapId mapId = itemStack.get(DataComponents.MAP_ID);
+        MapItemSavedData mapData = MapItem.getSavedData(mapId, player.level());
+        if (mapData == null) {
+            ci.cancel();
+            return;
+        }
+
+        AtlasContents contents = itemStack.getOrDefault(ModComponents.ATLAS_CONTENTS, AtlasContents.EMPTY);
+        Packet<?> packet = mapData.getUpdatePacket(mapId, player);
+        Packet<?> augmentedPacket = AtlasWaypointDecorations.withAtlasWaypointDecorations(packet, mapData, contents);
+        if (augmentedPacket != null) {
+            player.connection.send(augmentedPacket);
+        }
+
+        ci.cancel();
+    }
+
+    @Unique
+    private ServerPlayer simple_atlas$self() {
+        return (ServerPlayer) (Object) this;
+    }
+}

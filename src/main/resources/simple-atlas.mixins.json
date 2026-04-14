@@ -7,12 +7,16 @@
     "CartographyTableAdditionalSlotMixin",
     "CartographyTableMapSlotMixin",
     "CartographyTableMenuMixin",
-    "CartographyTableResultSlotMixin"
+    "CartographyTableResultSlotMixin",
+    "ServerPlayerMixin"
+  ],
+  "client": [
+    "client.ItemInHandRendererNoAtlasReequipMixin"
   ],
   "injectors": {
     "defaultRequire": 1
   },
   "overwrites": {
     "requireAnnotations": true
-	}
+  }
 }

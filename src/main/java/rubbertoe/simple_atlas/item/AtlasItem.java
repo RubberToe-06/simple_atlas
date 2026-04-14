@@ -10,12 +10,16 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.item.component.TooltipDisplay;
 import net.minecraft.world.item.context.UseOnContext;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BannerBlockEntity;
 import net.minecraft.world.level.saveddata.maps.MapId;
@@ -31,6 +35,7 @@ import rubbertoe.simple_atlas.navigation.WaypointIconCatalog;
 import rubbertoe.simple_atlas.network.AtlasTilePayload;
 import rubbertoe.simple_atlas.network.ModNetworking;
 import rubbertoe.simple_atlas.network.OpenAtlasScreenPayload;
+import rubbertoe.simple_atlas.map.AtlasMapSelector;
 import rubbertoe.simple_atlas.server.AtlasViewManager;
 
 public class AtlasItem extends Item {
@@ -157,6 +162,42 @@ public class AtlasItem extends Item {
 
 
         return InteractionResult.SUCCESS;
+    }
+
+    @Override
+    public void inventoryTick(@NonNull ItemStack stack, @NonNull ServerLevel level, @NonNull Entity entity, EquipmentSlot slot) {
+        super.inventoryTick(stack, level, entity, slot);
+
+        if (!(entity instanceof Player player)) {
+            return;
+        }
+
+        boolean heldInHand = slot == EquipmentSlot.MAINHAND || slot == EquipmentSlot.OFFHAND;
+        if (!heldInHand) {
+            stack.remove(DataComponents.MAP_ID);
+            return;
+        }
+
+        AtlasContents contents = stack.getOrDefault(ModComponents.ATLAS_CONTENTS, AtlasContents.EMPTY);
+        if (contents.mapIds().isEmpty()) {
+            stack.remove(DataComponents.MAP_ID);
+            return;
+        }
+
+        Integer currentMapRawId = AtlasMapSelector.findCurrentMapRawId(level, player.getX(), player.getZ(), contents.mapIds());
+        if (currentMapRawId == null) {
+            stack.remove(DataComponents.MAP_ID);
+            return;
+        }
+
+        MapId targetId = new MapId(currentMapRawId);
+        MapId existingId = stack.get(DataComponents.MAP_ID);
+        if (!targetId.equals(existingId)) {
+            stack.set(DataComponents.MAP_ID, targetId);
+        }
+
+        // Mirror vanilla carried-map behavior so the player marker is present on the held atlas map.
+        Items.FILLED_MAP.inventoryTick(stack, level, entity, slot);
     }
 
 
