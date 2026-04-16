@@ -2,6 +2,7 @@ package rubbertoe.simple_atlas.server;
 
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
@@ -70,11 +71,14 @@ public final class AtlasViewTicker {
             return;
         }
 
+        MapId existingId = stack.get(DataComponents.MAP_ID);
+        Integer preferredRawId = existingId != null ? existingId.id() : null;
         Integer currentMapRawId = AtlasMapSelector.findCurrentMapRawId(
                 player.level(),
                 player.getX(),
                 player.getZ(),
-                contents.mapIds()
+                contents.mapIds(),
+                preferredRawId
         );
         if (currentMapRawId == null) {
             return;

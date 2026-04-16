@@ -5,13 +5,20 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.network.protocol.Packet;
+import net.minecraft.network.protocol.game.ClientboundMapItemDataPacket;
 import net.minecraft.network.protocol.game.ClientboundTrackedWaypointPacket;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.saveddata.maps.MapDecoration;
+import net.minecraft.world.level.saveddata.maps.MapId;
+import net.minecraft.world.level.saveddata.maps.MapItemSavedData;
 import net.minecraft.world.waypoints.Waypoint;
 import rubbertoe.simple_atlas.component.AtlasContents;
 import rubbertoe.simple_atlas.component.ModComponents;
 import rubbertoe.simple_atlas.item.ModItems;
 import rubbertoe.simple_atlas.navigation.WaypointIconCatalog;
+import rubbertoe.simple_atlas.server.AtlasWaypointDecorations;
 import rubbertoe.simple_atlas.server.AtlasViewManager;
 
 import java.util.ArrayList;
@@ -25,6 +32,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public final class ModNetworking {
     public static final int MAX_WAYPOINT_COUNT = 256;
+    private static final int PINNED_WAYPOINT_RECONCILE_INTERVAL_TICKS = 20;
     private static final Map<UUID, Set<UUID>> PINNED_NAVIGATION_IDS = new ConcurrentHashMap<>();
 
     private ModNetworking() {}
@@ -80,6 +88,7 @@ public final class ModNetworking {
                     );
                     atlasStack.set(ModComponents.ATLAS_CONTENTS, updated);
                     reconcilePinnedWaypoints(player, sanitizedWaypoints);
+                    sendImmediateWaypointRefresh(player, updated);
                 })
         );
         ServerPlayNetworking.registerGlobalReceiver(
@@ -128,6 +137,14 @@ public final class ModNetworking {
                 PINNED_NAVIGATION_IDS.remove(handler.player.getUUID())
         );
         ServerTickEvents.END_SERVER_TICK.register(server -> {
+            if (PINNED_NAVIGATION_IDS.isEmpty()) {
+                return;
+            }
+
+            if (server.getTickCount() % PINNED_WAYPOINT_RECONCILE_INTERVAL_TICKS != 0) {
+                return;
+            }
+
             for (UUID playerId : new ArrayList<>(PINNED_NAVIGATION_IDS.keySet())) {
                 var player = server.getPlayerList().getPlayer(playerId);
                 if (player == null) {
@@ -230,5 +247,57 @@ public final class ModNetworking {
             ));
         }
         return sanitized;
+    }
+
+    private static void sendImmediateWaypointRefresh(net.minecraft.server.level.ServerPlayer player, AtlasContents contents) {
+        Set<Integer> relevantMapIds = collectRelevantMapIds(player);
+        for (int rawId : contents.mapIds()) {
+            if (!relevantMapIds.isEmpty() && !relevantMapIds.contains(rawId)) {
+                continue;
+            }
+
+            MapId mapId = new MapId(rawId);
+            MapItemSavedData mapData = player.level().getMapData(mapId);
+            if (mapData == null) {
+                continue;
+            }
+
+            mapData.getHoldingPlayer(player);
+            Packet<?> packet = mapData.getUpdatePacket(mapId, player);
+
+            // Force a one-shot packet when vanilla has no dirty update, so waypoint edits apply instantly.
+            if (packet == null) {
+                List<MapDecoration> currentDecorations = new ArrayList<>();
+                mapData.getDecorations().forEach(currentDecorations::add);
+                packet = new ClientboundMapItemDataPacket(mapId, mapData.scale, mapData.locked, currentDecorations, null);
+            }
+
+            Packet<?> augmentedPacket = AtlasWaypointDecorations.withAtlasWaypointDecorations(packet, mapData, contents);
+            if (augmentedPacket != null) {
+                player.connection.send(augmentedPacket);
+            }
+        }
+    }
+
+    private static Set<Integer> collectRelevantMapIds(net.minecraft.server.level.ServerPlayer player) {
+        Set<Integer> relevantMapIds = new HashSet<>();
+        collectRelevantMapIdsFromStack(player.getMainHandItem(), relevantMapIds);
+        collectRelevantMapIdsFromStack(player.getOffhandItem(), relevantMapIds);
+        relevantMapIds.addAll(AtlasViewManager.getViewedMaps(player));
+        return relevantMapIds;
+    }
+
+    private static void collectRelevantMapIdsFromStack(ItemStack stack, Set<Integer> relevantMapIds) {
+        if (!stack.is(ModItems.ATLAS)) {
+            return;
+        }
+
+        AtlasContents contents = stack.getOrDefault(ModComponents.ATLAS_CONTENTS, AtlasContents.EMPTY);
+        relevantMapIds.addAll(contents.mapIds());
+
+        MapId currentMapId = stack.get(DataComponents.MAP_ID);
+        if (currentMapId != null) {
+            relevantMapIds.add(currentMapId.id());
+        }
     }
 }

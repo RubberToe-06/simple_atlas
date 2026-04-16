@@ -174,24 +174,31 @@ public class AtlasItem extends Item {
 
         boolean heldInHand = slot == EquipmentSlot.MAINHAND || slot == EquipmentSlot.OFFHAND;
         if (!heldInHand) {
-            stack.remove(DataComponents.MAP_ID);
+            removeMapIdIfPresent(stack);
             return;
         }
 
         AtlasContents contents = stack.getOrDefault(ModComponents.ATLAS_CONTENTS, AtlasContents.EMPTY);
         if (contents.mapIds().isEmpty()) {
-            stack.remove(DataComponents.MAP_ID);
+            removeMapIdIfPresent(stack);
             return;
         }
 
-        Integer currentMapRawId = AtlasMapSelector.findCurrentMapRawId(level, player.getX(), player.getZ(), contents.mapIds());
+        MapId existingId = stack.get(DataComponents.MAP_ID);
+        Integer preferredRawId = existingId != null ? existingId.id() : null;
+        Integer currentMapRawId = AtlasMapSelector.findCurrentMapRawId(
+                level,
+                player.getX(),
+                player.getZ(),
+                contents.mapIds(),
+                preferredRawId
+        );
         if (currentMapRawId == null) {
-            stack.remove(DataComponents.MAP_ID);
+            removeMapIdIfPresent(stack);
             return;
         }
 
         MapId targetId = new MapId(currentMapRawId);
-        MapId existingId = stack.get(DataComponents.MAP_ID);
         if (!targetId.equals(existingId)) {
             stack.set(DataComponents.MAP_ID, targetId);
         }
@@ -255,5 +262,11 @@ public class AtlasItem extends Item {
                 contents.selectedWaypointIconIndex(),
                 contents.nextWaypointNumber() + 1
         );
+    }
+
+    private static void removeMapIdIfPresent(ItemStack stack) {
+        if (stack.has(DataComponents.MAP_ID)) {
+            stack.remove(DataComponents.MAP_ID);
+        }
     }
 }

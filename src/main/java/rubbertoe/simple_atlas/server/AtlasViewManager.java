@@ -16,16 +16,16 @@ public final class AtlasViewManager {
         ACTIVE_VIEWS.put(player.getUUID(), List.copyOf(mapIds));
     }
 
-    public static void updateViewedMaps(ServerPlayer player, List<Integer> mapIds) {
-        ACTIVE_VIEWS.put(player.getUUID(), List.copyOf(mapIds));
-    }
-
     public static void stopViewing(ServerPlayer player) {
         ACTIVE_VIEWS.remove(player.getUUID());
     }
 
     public static boolean isViewing(ServerPlayer player) {
         return ACTIVE_VIEWS.containsKey(player.getUUID());
+    }
+
+    public static List<Integer> getViewedMaps(ServerPlayer player) {
+        return ACTIVE_VIEWS.getOrDefault(player.getUUID(), List.of());
     }
 
 }
