@@ -62,6 +62,12 @@ public abstract class CartographyTableMenuMixin {
 
             AtlasContents contents = additionalStack.getOrDefault(ModComponents.ATLAS_CONTENTS, AtlasContents.EMPTY);
 
+            if (!contents.canAddMapId()) {
+                simple_atlas$rejectAtlasResult();
+                ci.cancel();
+                return;
+            }
+
             if (contents.contains(mapId.id())) {
                 simple_atlas$rejectAtlasResult();
                 ci.cancel();
@@ -102,6 +108,15 @@ public abstract class CartographyTableMenuMixin {
             AtlasContents bottomContents = additionalStack.getOrDefault(ModComponents.ATLAS_CONTENTS, AtlasContents.EMPTY);
 
             if (topContents.size() != bottomContents.size()) {
+                simple_atlas$rejectAtlasResult();
+                ci.cancel();
+                return;
+            }
+
+            LinkedHashSet<Integer> mergedMapIds = new LinkedHashSet<>(bottomContents.mapIds());
+            mergedMapIds.addAll(topContents.mapIds());
+            int mergedMapCount = mergedMapIds.size();
+            if (mergedMapCount > AtlasContents.MAX_ATLAS_MAP_COUNT) {
                 simple_atlas$rejectAtlasResult();
                 ci.cancel();
                 return;

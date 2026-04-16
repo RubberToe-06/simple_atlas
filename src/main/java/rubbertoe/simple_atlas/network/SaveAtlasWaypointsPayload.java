@@ -36,9 +36,9 @@ public record SaveAtlasWaypointsPayload(
 
     public static final StreamCodec<RegistryFriendlyByteBuf, SaveAtlasWaypointsPayload> CODEC =
             StreamCodec.composite(
-                    ByteBufCodecs.collection(ArrayList::new, ByteBufCodecs.INT),
+                    ByteBufCodecs.collection(ArrayList::new, ByteBufCodecs.INT, AtlasContents.MAX_ATLAS_MAP_COUNT),
                     p -> new ArrayList<>(p.atlasMapIds()),
-                    ByteBufCodecs.collection(ArrayList::new, WAYPOINT_CODEC),
+                    ByteBufCodecs.collection(ArrayList::new, WAYPOINT_CODEC, ModNetworking.MAX_WAYPOINT_COUNT),
                     p -> new ArrayList<>(p.waypoints()),
                     ByteBufCodecs.INT,
                     SaveAtlasWaypointsPayload::selectedWaypointIconIndex,

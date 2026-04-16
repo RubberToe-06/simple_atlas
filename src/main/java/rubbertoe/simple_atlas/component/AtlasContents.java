@@ -9,6 +9,7 @@ import java.util.Objects;
 import java.util.SequencedSet;
 
 public final class AtlasContents {
+    public static final int MAX_ATLAS_MAP_COUNT = 256;
     public static final AtlasContents EMPTY = new AtlasContents(List.of(), List.of(), 0, 1, 0);
 
     private static final int MAX_WAYPOINT_NAME_LENGTH = 32;
@@ -60,7 +61,7 @@ public final class AtlasContents {
             int nextWaypointNumber,
             int blankMapCount
     ) {
-        this.mapIdSet = new LinkedHashSet<>(mapIds);
+        this.mapIdSet = cappedMapIdSet(mapIds);
         this.waypoints = List.copyOf(waypoints);
         this.selectedWaypointIconIndex = Math.max(0, selectedWaypointIconIndex);
         this.nextWaypointNumber = Math.max(1, nextWaypointNumber);
@@ -94,7 +95,7 @@ public final class AtlasContents {
     }
 
     public AtlasContents withAdded(int mapId) {
-        if (contains(mapId)) {
+        if (contains(mapId) || mapIdSet.size() >= MAX_ATLAS_MAP_COUNT) {
             return this;
         }
 
@@ -105,6 +106,10 @@ public final class AtlasContents {
 
     public AtlasContents withWaypointState(List<WaypointData> waypoints, int selectedWaypointIconIndex, int nextWaypointNumber) {
         return new AtlasContents(mapIds(), waypoints, selectedWaypointIconIndex, nextWaypointNumber, blankMapCount);
+    }
+
+    public boolean canAddMapId() {
+        return mapIdSet.size() < MAX_ATLAS_MAP_COUNT;
     }
 
     public int size() {
@@ -122,6 +127,17 @@ public final class AtlasContents {
         }
 
         return trimmed;
+    }
+
+    private static SequencedSet<Integer> cappedMapIdSet(List<Integer> mapIds) {
+        LinkedHashSet<Integer> capped = new LinkedHashSet<>();
+        for (int mapId : mapIds) {
+            if (capped.size() >= MAX_ATLAS_MAP_COUNT) {
+                break;
+            }
+            capped.add(mapId);
+        }
+        return capped;
     }
 
     @Override
