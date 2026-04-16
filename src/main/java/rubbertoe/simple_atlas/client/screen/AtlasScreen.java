@@ -1150,6 +1150,8 @@ public class AtlasScreen extends Screen {
         graphics.pose().scale(scale, scale);
 
         minecraft.getMapRenderer().extractRenderState(id, data, state);
+        // AtlasScreen draws zoom-aware icons itself; suppress map-renderer decorations to avoid duplicate static markers.
+        state.decorations.clear();
         graphics.map(state);
 
         graphics.pose().popMatrix();

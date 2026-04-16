@@ -96,7 +96,7 @@ public final class AtlasViewTicker {
 
         mapData.getHoldingPlayer(player);
         Packet<?> packet = mapData.getUpdatePacket(mapId, player);
-        Packet<?> augmentedPacket = AtlasWaypointDecorations.withAtlasWaypointDecorations(packet, mapData, contents);
+        Packet<?> augmentedPacket = AtlasWaypointDecorations.withAtlasWaypointDecorations(packet, mapData, contents, false);
         if (augmentedPacket != null) {
             player.connection.send(augmentedPacket);
         }

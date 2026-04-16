@@ -18,11 +18,20 @@ import java.util.Optional;
 public final class AtlasWaypointDecorations {
     private AtlasWaypointDecorations() {}
 
-    public static Packet<?> withAtlasWaypointDecorations(Packet<?> packet, MapItemSavedData mapData, AtlasContents contents) {
+    public static Packet<?> withAtlasWaypointDecorations(
+            Packet<?> packet,
+            MapItemSavedData mapData,
+            AtlasContents contents,
+            boolean includeAtlasWaypoints
+    ) {
         if (!(packet instanceof ClientboundMapItemDataPacket(
                 net.minecraft.world.level.saveddata.maps.MapId mapId, byte scale, boolean locked,
                 Optional<List<MapDecoration>> decorations, Optional<MapItemSavedData.MapPatch> colorPatch
         ))) {
+            return packet;
+        }
+
+        if (!includeAtlasWaypoints) {
             return packet;
         }
 

@@ -16,6 +16,7 @@ import rubbertoe.simple_atlas.component.AtlasContents;
 import rubbertoe.simple_atlas.component.ModComponents;
 import rubbertoe.simple_atlas.item.ModItems;
 import rubbertoe.simple_atlas.server.AtlasWaypointDecorations;
+import rubbertoe.simple_atlas.server.AtlasViewManager;
 
 @Mixin(ServerPlayer.class)
 public abstract class ServerPlayerMixin {
@@ -35,7 +36,8 @@ public abstract class ServerPlayerMixin {
 
         AtlasContents contents = itemStack.getOrDefault(ModComponents.ATLAS_CONTENTS, AtlasContents.EMPTY);
         Packet<?> packet = mapData.getUpdatePacket(mapId, player);
-        Packet<?> augmentedPacket = AtlasWaypointDecorations.withAtlasWaypointDecorations(packet, mapData, contents);
+        boolean includeAtlasWaypoints = !AtlasViewManager.isViewing(player);
+        Packet<?> augmentedPacket = AtlasWaypointDecorations.withAtlasWaypointDecorations(packet, mapData, contents, includeAtlasWaypoints);
         if (augmentedPacket != null) {
             player.connection.send(augmentedPacket);
         }

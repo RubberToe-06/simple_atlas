@@ -272,7 +272,8 @@ public final class ModNetworking {
                 packet = new ClientboundMapItemDataPacket(mapId, mapData.scale, mapData.locked, currentDecorations, null);
             }
 
-            Packet<?> augmentedPacket = AtlasWaypointDecorations.withAtlasWaypointDecorations(packet, mapData, contents);
+            boolean includeAtlasWaypoints = !AtlasViewManager.isViewing(player);
+            Packet<?> augmentedPacket = AtlasWaypointDecorations.withAtlasWaypointDecorations(packet, mapData, contents, includeAtlasWaypoints);
             if (augmentedPacket != null) {
                 player.connection.send(augmentedPacket);
             }
