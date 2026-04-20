@@ -23,6 +23,7 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.lwjgl.glfw.GLFW;
 import rubbertoe.simple_atlas.SimpleAtlas;
+import rubbertoe.simple_atlas.client.input.ModKeyBindings;
 import rubbertoe.simple_atlas.component.AtlasContents;
 import rubbertoe.simple_atlas.client.screen.icon.AtlasIcon;
 import rubbertoe.simple_atlas.client.screen.icon.PlayerAtlasIcon;
@@ -1604,6 +1605,11 @@ public class AtlasScreen extends Screen {
                 waypointNameEditBox.keyPressed(event);
             }
             // Consume all key events while the draft UI is open.
+            return true;
+        }
+
+        if (ModKeyBindings.RESET_ZOOM_KEY != null && ModKeyBindings.RESET_ZOOM_KEY.matches(event)) {
+            resetPerspective();
             return true;
         }
 
