@@ -14,6 +14,7 @@ import net.minecraft.world.level.saveddata.maps.MapDecoration;
 import net.minecraft.world.level.saveddata.maps.MapId;
 import net.minecraft.world.level.saveddata.maps.MapItemSavedData;
 import net.minecraft.world.waypoints.Waypoint;
+import rubbertoe.simple_atlas.advancement.ModCriteria;
 import rubbertoe.simple_atlas.component.AtlasContents;
 import rubbertoe.simple_atlas.component.ModComponents;
 import rubbertoe.simple_atlas.item.ModItems;
@@ -64,7 +65,11 @@ public final class ModNetworking {
         );
         ServerPlayNetworking.registerGlobalReceiver(
                 CloseAtlasViewPayload.TYPE,
-                (_, context) -> context.server().execute(() -> AtlasViewManager.stopViewing(context.player()))
+                (_, context) -> context.server().execute(() -> {
+                    var player = context.player();
+                    AtlasViewManager.stopViewing(player);
+                    refreshHeldAtlasWaypoints(player);
+                })
         );
         ServerPlayNetworking.registerGlobalReceiver(
                 SaveAtlasWaypointsPayload.TYPE,
@@ -113,6 +118,7 @@ public final class ModNetworking {
 
                     BlockPos pos = BlockPos.containing(payload.worldX(), player.getY(), payload.worldZ());
                     sendPinnedWaypoint(player, newNavigationId, icon, pos);
+                    ModCriteria.WAYPOINT_PINNED_TO_LOCATOR_BAR.trigger(player);
                 })
         );
         ServerPlayNetworking.registerGlobalReceiver(
@@ -299,6 +305,20 @@ public final class ModNetworking {
         MapId currentMapId = stack.get(DataComponents.MAP_ID);
         if (currentMapId != null) {
             relevantMapIds.add(currentMapId.id());
+        }
+    }
+
+    private static void refreshHeldAtlasWaypoints(net.minecraft.server.level.ServerPlayer player) {
+        ItemStack mainHand = player.getMainHandItem();
+        if (mainHand.is(ModItems.ATLAS)) {
+            AtlasContents contents = mainHand.getOrDefault(ModComponents.ATLAS_CONTENTS, AtlasContents.EMPTY);
+            sendImmediateWaypointRefresh(player, contents);
+        }
+
+        ItemStack offHand = player.getOffhandItem();
+        if (offHand.is(ModItems.ATLAS) && offHand != mainHand) {
+            AtlasContents contents = offHand.getOrDefault(ModComponents.ATLAS_CONTENTS, AtlasContents.EMPTY);
+            sendImmediateWaypointRefresh(player, contents);
         }
     }
 }

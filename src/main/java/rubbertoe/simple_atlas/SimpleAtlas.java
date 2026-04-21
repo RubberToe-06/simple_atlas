@@ -3,6 +3,7 @@ package rubbertoe.simple_atlas;
 import net.fabricmc.api.ModInitializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import rubbertoe.simple_atlas.advancement.ModCriteria;
 import rubbertoe.simple_atlas.component.ModComponents;
 import rubbertoe.simple_atlas.item.ModItems;
 import rubbertoe.simple_atlas.map.ModMapDecorationTypes;
@@ -19,6 +20,7 @@ public class SimpleAtlas implements ModInitializer {
 		ModMapDecorationTypes.initialize();
 		ModComponents.initialize();
 		ModNetworking.initialize();
+		ModCriteria.initialize();
 		AtlasViewTicker.initialize();
 		LOGGER.info("Simple Atlas initialized.");
 	}

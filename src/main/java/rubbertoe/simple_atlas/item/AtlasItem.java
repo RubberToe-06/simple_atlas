@@ -27,6 +27,7 @@ import net.minecraft.world.level.saveddata.maps.MapItemSavedData;
 import org.jspecify.annotations.NonNull;
 
 import java.util.function.Consumer;
+import rubbertoe.simple_atlas.advancement.ModCriteria;
 import rubbertoe.simple_atlas.layout.AtlasLayout;
 import rubbertoe.simple_atlas.layout.AtlasLayoutBuilder;
 import rubbertoe.simple_atlas.component.AtlasContents;
@@ -92,6 +93,10 @@ public class AtlasItem extends Item {
 
         AtlasContents updated = withAppendedWaypoint(contents, waypoint);
         atlasStack.set(ModComponents.ATLAS_CONTENTS, updated);
+
+        if (player instanceof ServerPlayer serverPlayer) {
+            ModCriteria.WAYPOINT_ADDED_VIA_BANNER.trigger(serverPlayer);
+        }
 
         player.sendSystemMessage(
                 Component.literal("Added banner waypoint: " + waypoint.name())

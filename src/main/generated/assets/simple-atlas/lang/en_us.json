@@ -1,4 +1,14 @@
 {
+  "advancements.simple-atlas.adventure.backup_copy.description": "Duplicate an Atlas with a book at a cartography table",
+  "advancements.simple-atlas.adventure.backup_copy.title": "Backup Copy",
+  "advancements.simple-atlas.adventure.better_together.description": "Merge two Atlases at a cartography table",
+  "advancements.simple-atlas.adventure.better_together.title": "Better Together",
+  "advancements.simple-atlas.adventure.craft_atlas.description": "Obtain an empty Atlas",
+  "advancements.simple-atlas.adventure.craft_atlas.title": "Paper Trail",
+  "advancements.simple-atlas.adventure.marco.description": "Pin a waypoint to the locator bar",
+  "advancements.simple-atlas.adventure.marco.title": "Marco!",
+  "advancements.simple-atlas.adventure.old_fashioned.description": "Add a waypoint to an Atlas using a banner",
+  "advancements.simple-atlas.adventure.old_fashioned.title": "Old Fashioned",
   "item.simple-atlas.map_atlas": "Atlas",
   "key.category.simple-atlas.atlas": "Simple Atlas",
   "key.simple_atlas.reset_zoom": "Reset Zoom"

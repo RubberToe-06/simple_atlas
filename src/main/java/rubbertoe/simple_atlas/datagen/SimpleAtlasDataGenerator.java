@@ -11,5 +11,6 @@ public class SimpleAtlasDataGenerator implements DataGeneratorEntrypoint {
 		pack.addProvider(SimpleAtlasModelProvider::new);
 		pack.addProvider(SimpleAtlasLangProvider::new);
 		pack.addProvider(SimpleAtlasRecipeProvider::new);
+		pack.addProvider(SimpleAtlasAdvancementProvider::new);
 	}
 }

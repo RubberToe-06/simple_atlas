@@ -1,6 +1,7 @@
 package rubbertoe.simple_atlas.server;
 
 import net.minecraft.core.Holder;
+import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientboundMapItemDataPacket;
 import net.minecraft.world.level.saveddata.maps.MapDecoration;
@@ -73,7 +74,7 @@ public final class AtlasWaypointDecorations {
                 clampMapCoordinate(zDeltaFromCenter),
                 // Vanilla target decorations use 180deg defaults, which avoids upside-down variants.
                 (byte) 8,
-                Optional.empty()
+                waypoint.name().isBlank() ? Optional.empty() : Optional.of(Component.literal(waypoint.name()))
         );
     }
 
