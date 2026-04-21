@@ -73,10 +73,6 @@ public class AtlasItem extends Item {
 
         BlockPos bannerPos = context.getClickedPos();
         if (hasWaypointAtBlock(contents, bannerPos)) {
-            player.sendSystemMessage(
-                    Component.literal("This banner is already saved as a waypoint")
-                            .withStyle(ChatFormatting.GRAY)
-            );
             return InteractionResult.SUCCESS_SERVER;
         }
 
@@ -97,11 +93,6 @@ public class AtlasItem extends Item {
         if (player instanceof ServerPlayer serverPlayer) {
             ModCriteria.WAYPOINT_ADDED_VIA_BANNER.trigger(serverPlayer);
         }
-
-        player.sendSystemMessage(
-                Component.literal("Added banner waypoint: " + waypoint.name())
-                        .withStyle(ChatFormatting.GREEN)
-        );
         return InteractionResult.SUCCESS_SERVER;
     }
 
