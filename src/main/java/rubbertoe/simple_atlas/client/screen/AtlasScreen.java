@@ -1375,6 +1375,7 @@ public class AtlasScreen extends Screen {
         float scaledTileSize = context.scaledTileSize();
         float mapOriginX = context.mapOriginX();
         float mapOriginY = context.mapOriginY();
+        boolean mouseWithinAtlasContent = isWithinAtlasContent(viewport, mouseX, mouseY);
         Minecraft minecraft = Minecraft.getInstance();
         HoveredAtlasIcon hoveredIcon;
 
@@ -1395,7 +1396,8 @@ public class AtlasScreen extends Screen {
             renderMapTile(graphics, tile.mapId(), x, y, scaledTileSize / 128.0f);
 
             boolean hovered =
-                    mouseX >= x &&
+                    mouseWithinAtlasContent &&
+                            mouseX >= x &&
                             mouseX < x + scaledTileSize &&
                             mouseY >= y &&
                             mouseY < y + scaledTileSize;
@@ -1427,7 +1429,9 @@ public class AtlasScreen extends Screen {
 
         // Don't show hovered icon titles when the waypoint draft menu is open
         if (waypointDraft == null) {
-            hoveredIcon = findHoveredIcon(minecraft, mapOriginX, mapOriginY, scaledTileSize, mouseX, mouseY);
+            hoveredIcon = mouseWithinAtlasContent
+                    ? findHoveredIcon(minecraft, mapOriginX, mapOriginY, scaledTileSize, mouseX, mouseY)
+                    : null;
             if (hoveredIcon != null) {
                 renderHoveredIconTitle(graphics, viewport, hoveredIcon);
             }
