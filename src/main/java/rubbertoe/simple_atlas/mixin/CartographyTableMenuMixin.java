@@ -8,6 +8,7 @@ import net.minecraft.world.inventory.ResultContainer;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.saveddata.maps.MapId;
 import net.minecraft.world.level.saveddata.maps.MapItemSavedData;
 import org.spongepowered.asm.mixin.Final;
@@ -19,6 +20,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import rubbertoe.simple_atlas.component.AtlasContents;
+import rubbertoe.simple_atlas.cartography.AtlasCartographyScaler;
 import rubbertoe.simple_atlas.component.ModComponents;
 import rubbertoe.simple_atlas.item.ModItems;
 
@@ -62,18 +64,6 @@ public abstract class CartographyTableMenuMixin {
 
             AtlasContents contents = additionalStack.getOrDefault(ModComponents.ATLAS_CONTENTS, AtlasContents.EMPTY);
 
-            if (!contents.canAddMapId()) {
-                simple_atlas$rejectAtlasResult();
-                ci.cancel();
-                return;
-            }
-
-            if (contents.contains(mapId.id())) {
-                simple_atlas$rejectAtlasResult();
-                ci.cancel();
-                return;
-            }
-
             this.access.execute((level, _) -> {
                 MapItemSavedData newMapData = level.getMapData(mapId);
                 if (newMapData == null) {
@@ -82,12 +72,39 @@ public abstract class CartographyTableMenuMixin {
                 }
 
                 if (!contents.mapIds().isEmpty()) {
-                    int originRawId = contents.mapIds().getFirst();
-                    MapItemSavedData originMapData = level.getMapData(new MapId(originRawId));
-                    if (originMapData == null || originMapData.scale != newMapData.scale) {
+                    MapItemSavedData originMapData = level.getMapData(new MapId(contents.mapIds().getFirst()));
+                    if (originMapData == null) {
                         simple_atlas$rejectAtlasResult();
                         return;
                     }
+
+                    if (newMapData.scale > originMapData.scale) {
+                        // Higher scale (more zoomed out than atlas) – reject
+                        simple_atlas$rejectAtlasResult();
+                        return;
+                    }
+
+                    if (newMapData.scale < originMapData.scale) {
+                        // Lower scale (more detailed than atlas) – validate and defer to onTake
+                        if (!(level instanceof ServerLevel serverLevel)
+                                || !AtlasCartographyScaler.canIntegrateFinerMap(serverLevel, contents, mapId)) {
+                            simple_atlas$rejectAtlasResult();
+                            return;
+                        }
+                        // Show result as the current atlas; actual map data created on take
+                        ItemStack result = additionalStack.copyWithCount(1);
+                        if (!ItemStack.matches(result, resultStack)) {
+                            this.resultContainer.setItem(2, result);
+                            ((CartographyTableMenu) (Object) this).broadcastChanges();
+                        }
+                        return;
+                    }
+                }
+
+                // Same scale (or empty atlas) – original behavior
+                if (!contents.canAddMapId() || contents.contains(mapId.id())) {
+                    simple_atlas$rejectAtlasResult();
+                    return;
                 }
 
                 ItemStack result = additionalStack.copyWithCount(1);
@@ -100,6 +117,28 @@ public abstract class CartographyTableMenuMixin {
             });
 
             ci.cancel();
+        }
+
+        // ── Atlas + paper → scale every atlas map by +1 (deduped on take) ─────
+        if (mapStack.is(ModItems.ATLAS) && additionalStack.is(Items.PAPER)) {
+            AtlasContents contents = mapStack.getOrDefault(ModComponents.ATLAS_CONTENTS, AtlasContents.EMPTY);
+
+            this.access.execute((level, _) -> {
+                if (!(level instanceof ServerLevel serverLevel)
+                        || !AtlasCartographyScaler.canScaleAtlas(serverLevel, contents)) {
+                    simple_atlas$rejectAtlasResult();
+                    return;
+                }
+
+                ItemStack result = mapStack.copyWithCount(1);
+                if (!ItemStack.matches(result, resultStack)) {
+                    this.resultContainer.setItem(2, result);
+                    ((CartographyTableMenu) (Object) this).broadcastChanges();
+                }
+            });
+
+            ci.cancel();
+            return;
         }
 
         // ── Atlas + atlas → merge contents (requires same size) ──────────────

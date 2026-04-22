@@ -28,7 +28,8 @@ public class AtlasCartographyActionTrigger extends SimpleCriterionTrigger<AtlasC
 
     public enum Action {
         DUPLICATE,
-        MERGE;
+        MERGE,
+        SCALE;
 
         public static final Codec<Action> CODEC = Codec.STRING.comapFlatMap(
                 name -> Arrays.stream(values())
