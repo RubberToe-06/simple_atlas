@@ -36,13 +36,7 @@ import rubbertoe.simple_atlas.network.SaveAtlasWaypointsPayload;
 import rubbertoe.simple_atlas.network.UnpinWaypointPayload;
 import rubbertoe.simple_atlas.navigation.WaypointIconCatalog;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 
 public class AtlasScreen extends Screen {
     // Atlas/book shell layout
@@ -75,6 +69,34 @@ public class AtlasScreen extends Screen {
     private static final int WAYPOINT_PICKER_ARROW_SIZE = 12;
     private static final int WAYPOINT_PICKER_INPUT_HEIGHT = 16;
 
+    // Bookmark tab rendering
+    private static final Identifier BOOKMARK_TAB_TEXTURE = Identifier.fromNamespaceAndPath(SimpleAtlas.MOD_ID, "textures/gui/tabs/bookmark.png");
+    private static final Identifier BOOKMARK_TAB_SELECTED_TEXTURE = Identifier.fromNamespaceAndPath(SimpleAtlas.MOD_ID, "textures/gui/tabs/bookmark_selected.png");
+    private static final Identifier BOOKMARK_OVERWORLD_ICON_TEXTURE = Identifier.fromNamespaceAndPath(SimpleAtlas.MOD_ID, "textures/gui/tabs/overworld_icon.png");
+    private static final Identifier BOOKMARK_NETHER_ICON_TEXTURE = Identifier.fromNamespaceAndPath(SimpleAtlas.MOD_ID, "textures/gui/tabs/nether_icon.png");
+    private static final Identifier BOOKMARK_END_ICON_TEXTURE = Identifier.fromNamespaceAndPath(SimpleAtlas.MOD_ID, "textures/gui/tabs/end_icon.png");
+    private static final Identifier BOOKMARK_OTHER_ICON_TEXTURE = Identifier.fromNamespaceAndPath(SimpleAtlas.MOD_ID, "textures/gui/tabs/other_icon.png");
+    /** Known dimension keys in display order. Any not listed fall back to OTHER. */
+    private static final List<String> DIMENSION_ORDER = List.of(
+            "minecraft:overworld",
+            "minecraft:the_nether",
+            "minecraft:the_end"
+    );
+    private static final Map<String, Identifier> DIMENSION_ICON_MAP = Map.of(
+            "minecraft:overworld", BOOKMARK_OVERWORLD_ICON_TEXTURE,
+            "minecraft:the_nether", BOOKMARK_NETHER_ICON_TEXTURE,
+            "minecraft:the_end", BOOKMARK_END_ICON_TEXTURE
+    );
+    private static final int BOOKMARK_TAB_WIDTH = 30;
+    private static final int BOOKMARK_TAB_HEIGHT = 30;
+    private static final int BOOKMARK_ICON_TEXTURE_SIZE = 16;
+    private static final int BOOKMARK_ICON_RENDER_SIZE = 10;
+    private static final int BOOKMARK_TABS_TOP_OFFSET = -6;
+    private static final int BOOKMARK_TABS_RIGHT_OVERLAP = -2;
+    private static final int BOOKMARK_TAB_GAP = -8;
+    private static final int BOOKMARK_CLIP_LEFT_OFFSET = 0;
+    private static final int BOOKMARK_UNSELECTED_RETRACTION_AMOUNT = 6;
+
     // Context menu
     private static final int WAYPOINT_CONTEXT_MENU_WIDTH = 132;
     private static final int WAYPOINT_CONTEXT_MENU_ROW_HEIGHT = 14;
@@ -100,6 +122,10 @@ public class AtlasScreen extends Screen {
     private final List<AtlasIcon> atlasIcons;
     private final List<AtlasContents.WaypointData> atlasWaypoints;
     private final List<WaypointIconOption> waypointIconOptions;
+    /** Ordered list of dimension keys present in this atlas (e.g. "minecraft:overworld"). */
+    private final List<String> dimensionTabs;
+    /** Player's current dimension when atlas was opened. */
+    private final String playerDimension;
 
     // Map interaction state
     private final Map<Integer, MapRenderState> renderStates = new HashMap<>();
@@ -107,6 +133,7 @@ public class AtlasScreen extends Screen {
     private double panY = 0;
     private boolean leftDragging = false;
     private float zoom = 2.0f;
+    private int selectedBookmarkTab = 0;
 
     // Waypoint draft/context menu state
     private int selectedWaypointIconIndex;
@@ -213,7 +240,7 @@ public class AtlasScreen extends Screen {
     }
 
     private static List<WaypointIconOption> createWaypointIconOptions() {
-        return WaypointIconCatalog.iconKeys().stream()
+        return WaypointIconCatalog.getAvailableIconKeys().stream()
                 .map(key -> createIconOption(key + ".png"))
                 .toList();
     }
@@ -223,12 +250,14 @@ public class AtlasScreen extends Screen {
         final double worldZ;
         String name;
         int iconIndex;
+        String dimension;
 
-        WaypointDraft(double worldX, double worldZ, String name, int iconIndex) {
+        WaypointDraft(double worldX, double worldZ, String name, int iconIndex, String dimension) {
             this.worldX = worldX;
             this.worldZ = worldZ;
             this.name = name;
             this.iconIndex = iconIndex;
+            this.dimension = dimension;
         }
     }
 
@@ -266,7 +295,8 @@ public class AtlasScreen extends Screen {
                 payload.atlasMapIds(),
                 payload.waypoints(),
                 payload.selectedWaypointIconIndex(),
-                payload.nextWaypointNumber()
+                payload.nextWaypointNumber(),
+                payload.playerDimension()
         );
     }
 
@@ -275,14 +305,24 @@ public class AtlasScreen extends Screen {
             List<Integer> atlasMapIds,
             List<AtlasContents.WaypointData> waypoints,
             int selectedWaypointIconIndex,
-            int nextWaypointNumber
+            int nextWaypointNumber,
+            String playerDimension
     ) {
         super(Component.literal("Atlas"));
         this.tiles = tiles;
         this.atlasMapIds = List.copyOf(atlasMapIds);
         this.atlasWaypoints = new ArrayList<>(waypoints);
+        this.playerDimension = playerDimension;
         this.atlasWidth = tiles.stream().mapToInt(AtlasTilePayload::tileX).max().orElse(0) + 1;
         this.atlasHeight = tiles.stream().mapToInt(AtlasTilePayload::tileY).max().orElse(0) + 1;
+
+        // Build ordered dimension tab list: known dimensions in order, then unknowns alphabetically.
+        LinkedHashSet<String> dimsSeen = getStrings(tiles);
+        this.dimensionTabs = List.copyOf(dimsSeen);
+
+        // Select the tab for the player's current dimension, or default to first available tab
+        this.selectedBookmarkTab = findDimensionTabIndex(playerDimension);
+
         this.playerIcon = new PlayerAtlasIcon(
                 PLAYER_MARKER_TEXTURE,
                 PLAYER_MARKER_TEXTURE_SIZE,
@@ -306,6 +346,31 @@ public class AtlasScreen extends Screen {
                     waypoint.iconIndex()
             ));
         }
+    }
+
+    private static @NonNull LinkedHashSet<String> getStrings(List<AtlasTilePayload> tiles) {
+        LinkedHashSet<String> dimsSeen = new LinkedHashSet<>();
+        for (String d : DIMENSION_ORDER) {
+            for (AtlasTilePayload t : tiles) {
+                if (t.dimension().equals(d)) { dimsSeen.add(d); break; }
+            }
+        }
+        TreeSet<String> extras = new TreeSet<>();
+        for (AtlasTilePayload t : tiles) {
+            if (!DIMENSION_ORDER.contains(t.dimension())) extras.add(t.dimension());
+        }
+        dimsSeen.addAll(extras);
+        return dimsSeen;
+    }
+
+    private int findDimensionTabIndex(String dimension) {
+        for (int i = 0; i < dimensionTabs.size(); i++) {
+            if (dimensionTabs.get(i).equals(dimension)) {
+                return i;
+            }
+        }
+        // Default to first tab if dimension not found
+        return 0;
     }
 
     @Override
@@ -387,7 +452,25 @@ public class AtlasScreen extends Screen {
         centerOnIcon(this.playerIcon);
     }
 
+    private void centerOnSelectedDimensionAtCurrentZoom() {
+        String selectedDimension = getSelectedDimension();
+        List<AtlasTilePayload> visibleTiles = getVisibleTilesForDimension(selectedDimension);
+        if (visibleTiles.isEmpty()) {
+            return;
+        }
+
+        if (selectedDimension.equals(playerDimension) && centerOnIcon(this.playerIcon, visibleTiles)) {
+            return;
+        }
+
+        centerOnTile(visibleTiles.getFirst());
+    }
+
     private void centerOnIcon(AtlasIcon icon) {
+        centerOnIcon(icon, tiles);
+    }
+
+    private boolean centerOnIcon(AtlasIcon icon, List<AtlasTilePayload> visibleTiles) {
         float scaledTileSize = TILE_SIZE * zoom;
         AtlasViewport viewport = getAtlasViewport();
         Minecraft minecraft = Minecraft.getInstance();
@@ -399,13 +482,30 @@ public class AtlasScreen extends Screen {
         float originX = getMapOriginX(viewport, scaledTileSize);
         float originY = getMapOriginY(viewport, scaledTileSize);
 
-        AtlasIcon.Anchor anchor = icon.resolveAnchor(minecraft, tiles, originX, originY, scaledTileSize);
+        AtlasIcon.Anchor anchor = icon.resolveAnchor(minecraft, visibleTiles, originX, originY, scaledTileSize);
         if (anchor == null) {
-            return;
+            return false;
         }
 
         this.panX = viewport.contentX() + viewport.contentWidth() / 2.0 - anchor.screenX();
         this.panY = viewport.contentY() + viewport.contentHeight() / 2.0 - anchor.screenY();
+        return true;
+    }
+
+    private void centerOnTile(AtlasTilePayload tile) {
+        float scaledTileSize = TILE_SIZE * zoom;
+        AtlasViewport viewport = getAtlasViewport();
+
+        this.panX = 0;
+        this.panY = 0;
+
+        float originX = getMapOriginX(viewport, scaledTileSize);
+        float originY = getMapOriginY(viewport, scaledTileSize);
+        float tileCenterX = originX + (tile.tileX() + 0.5f) * scaledTileSize;
+        float tileCenterY = originY + (tile.tileY() + 0.5f) * scaledTileSize;
+
+        this.panX = viewport.contentX() + viewport.contentWidth() / 2.0 - tileCenterX;
+        this.panY = viewport.contentY() + viewport.contentHeight() / 2.0 - tileCenterY;
     }
 
     private AtlasIcon createWaypointIcon(double worldX, double worldZ, Component title, int iconIndex) {
@@ -433,13 +533,20 @@ public class AtlasScreen extends Screen {
         return firstData != null ? (1 << firstData.scale) : null;
     }
 
-    private WorldPoint screenToWorldPoint(double mouseX, double mouseY, float mapOriginX, float mapOriginY, float scaledTileSize) {
+    private WorldPoint screenToWorldPoint(
+            double mouseX,
+            double mouseY,
+            float mapOriginX,
+            float mapOriginY,
+            float scaledTileSize,
+            List<AtlasTilePayload> visibleTiles
+    ) {
         Integer scaleFactor = getAtlasScaleFactor();
         if (scaleFactor == null) {
             return null;
         }
 
-        for (AtlasTilePayload tile : tiles) {
+        for (AtlasTilePayload tile : visibleTiles) {
             float tileScreenX = mapOriginX + tile.tileX() * scaledTileSize;
             float tileScreenY = mapOriginY + tile.tileY() * scaledTileSize;
 
@@ -507,7 +614,7 @@ public class AtlasScreen extends Screen {
         return contextMenuWorldPoint != null ? WAYPOINT_CONTEXT_MENU_MAP_ROWS : 0;
     }
 
-    private void teleportToLocation(double worldX, double worldZ) {
+    private void teleportToLocation(double worldX, double worldZ, String dimension) {
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.player == null) {
             return;
@@ -515,7 +622,8 @@ public class AtlasScreen extends Screen {
 
         int blockX = Mth.floor(worldX);
         int blockZ = Mth.floor(worldZ);
-        minecraft.player.connection.sendCommand("tp " + blockX + " ~ " + blockZ);
+        // Use /execute in <dimension> run tp to teleport to a specific dimension
+        minecraft.player.connection.sendCommand("execute in " + dimension + " run tp " + blockX + " ~ " + blockZ);
         this.onClose();
     }
 
@@ -555,13 +663,20 @@ public class AtlasScreen extends Screen {
             return false;
         }
 
+        String selectedDimension = getSelectedDimension();
+        List<AtlasTilePayload> visibleTiles = tiles.stream()
+                .filter(t -> t.dimension().equals(selectedDimension))
+                .toList();
+
         int hoveredWaypointIndex = findHoveredWaypointIndex(
                 Minecraft.getInstance(),
                 context.mapOriginX(),
                 context.mapOriginY(),
                 context.scaledTileSize(),
                 (int) event.x(),
-                (int) event.y()
+                (int) event.y(),
+                selectedDimension,
+                visibleTiles
         );
 
         if (hoveredWaypointIndex >= 0) {
@@ -576,7 +691,8 @@ public class AtlasScreen extends Screen {
                 event.y(),
                 context.mapOriginX(),
                 context.mapOriginY(),
-                context.scaledTileSize()
+                context.scaledTileSize(),
+                visibleTiles
         );
         if (worldPoint != null && !waypointIconOptions.isEmpty()) {
             openNewWaypointContextMenu(worldPoint, event.x(), event.y());
@@ -594,9 +710,13 @@ public class AtlasScreen extends Screen {
             float mapOriginY,
             float scaledTileSize,
             int mouseX,
-            int mouseY
+            int mouseY,
+            String selectedDimension,
+            List<AtlasTilePayload> visibleTiles
     ) {
-        AtlasIcon.Anchor playerAnchor = resolveHoveredAnchor(playerIcon, minecraft, mapOriginX, mapOriginY, scaledTileSize, mouseX, mouseY);
+        AtlasIcon.Anchor playerAnchor = selectedDimension.equals(playerDimension)
+                ? resolveHoveredAnchor(playerIcon, minecraft, visibleTiles, mapOriginX, mapOriginY, scaledTileSize, mouseX, mouseY)
+                : null;
         if (playerAnchor != null) {
             return -1;
         }
@@ -607,8 +727,13 @@ public class AtlasScreen extends Screen {
                 continue;
             }
 
+            AtlasContents.WaypointData waypoint = atlasWaypoints.get(i);
+            if (!waypoint.dimension().equals(selectedDimension)) {
+                continue;
+            }
+
             AtlasIcon icon = atlasIcons.get(iconListIndex);
-            AtlasIcon.Anchor anchor = resolveHoveredAnchor(icon, minecraft, mapOriginX, mapOriginY, scaledTileSize, mouseX, mouseY);
+            AtlasIcon.Anchor anchor = resolveHoveredAnchor(icon, minecraft, visibleTiles, mapOriginX, mapOriginY, scaledTileSize, mouseX, mouseY);
             if (anchor != null) {
                 return i;
             }
@@ -641,14 +766,17 @@ public class AtlasScreen extends Screen {
         }
         int iconIndex = waypointIconOptions.isEmpty() ? 0 : Math.floorMod(waypoint.iconIndex(), waypointIconOptions.size());
         this.selectedWaypointIconIndex = iconIndex;
-        this.waypointDraft = new WaypointDraft(waypoint.worldX(), waypoint.worldZ(), waypoint.name(), iconIndex);
+        this.waypointDraft = new WaypointDraft(waypoint.worldX(), waypoint.worldZ(), waypoint.name(), iconIndex, waypoint.dimension());
         this.editingWaypointIndex = waypointIndex;
         rebuildOverlayWidgets();
     }
 
     private void beginNewWaypoint(WorldPoint worldPoint) {
         String defaultName = "Waypoint " + nextWaypointNumber;
-        this.waypointDraft = new WaypointDraft(worldPoint.x(), worldPoint.z(), defaultName, selectedWaypointIconIndex);
+        String selectedDimension = (selectedBookmarkTab < dimensionTabs.size())
+                ? dimensionTabs.get(selectedBookmarkTab)
+                : (dimensionTabs.isEmpty() ? "minecraft:overworld" : dimensionTabs.getFirst());
+        this.waypointDraft = new WaypointDraft(worldPoint.x(), worldPoint.z(), defaultName, selectedWaypointIconIndex, selectedDimension);
         this.editingWaypointIndex = -1;
         rebuildOverlayWidgets();
     }
@@ -982,6 +1110,13 @@ public class AtlasScreen extends Screen {
         }
     }
 
+    private void playBookmarkTabSound() {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.player != null) {
+            minecraft.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.BOOK_PAGE_TURN, 1.0f));
+        }
+    }
+
     private boolean commitWaypointDraft() {
         if (waypointDraft == null) {
             return false;
@@ -996,7 +1131,8 @@ public class AtlasScreen extends Screen {
                 waypointDraft.worldX,
                 waypointDraft.worldZ,
                 name,
-                waypointDraft.iconIndex
+                waypointDraft.iconIndex,
+                waypointDraft.dimension
         );
 
         if (editingWaypointIndex >= 0 && editingWaypointIndex < atlasWaypoints.size()) {
@@ -1190,13 +1326,14 @@ public class AtlasScreen extends Screen {
     private AtlasIcon.Anchor resolveHoveredAnchor(
             AtlasIcon icon,
             Minecraft minecraft,
+            List<AtlasTilePayload> visibleTiles,
             float mapOriginX,
             float mapOriginY,
             float scaledTileSize,
             int mouseX,
             int mouseY
     ) {
-        AtlasIcon.Anchor anchor = icon.resolveAnchor(minecraft, tiles, mapOriginX, mapOriginY, scaledTileSize);
+        AtlasIcon.Anchor anchor = icon.resolveAnchor(minecraft, visibleTiles, mapOriginX, mapOriginY, scaledTileSize);
         if (anchor == null || !icon.containsPoint(anchor, mouseX, mouseY)) {
             return null;
         }
@@ -1209,9 +1346,13 @@ public class AtlasScreen extends Screen {
             float mapOriginY,
             float scaledTileSize,
             int mouseX,
-            int mouseY
+            int mouseY,
+            String selectedDimension,
+            List<AtlasTilePayload> visibleTiles
     ) {
-        AtlasIcon.Anchor playerAnchor = resolveHoveredAnchor(playerIcon, minecraft, mapOriginX, mapOriginY, scaledTileSize, mouseX, mouseY);
+        AtlasIcon.Anchor playerAnchor = selectedDimension.equals(playerDimension)
+                ? resolveHoveredAnchor(playerIcon, minecraft, visibleTiles, mapOriginX, mapOriginY, scaledTileSize, mouseX, mouseY)
+                : null;
         if (playerAnchor != null) {
             Component playerTitle = playerIcon.resolveHoverTitle(minecraft);
             if (playerTitle != null) {
@@ -1220,13 +1361,19 @@ public class AtlasScreen extends Screen {
             return null;
         }
 
-        for (int i = atlasIcons.size() - 1; i >= 0; i--) {
-            AtlasIcon icon = atlasIcons.get(i);
-            if (icon == playerIcon) {
+        for (int i = atlasWaypoints.size() - 1; i >= 0; i--) {
+            int iconListIndex = i + 1;
+            if (iconListIndex >= atlasIcons.size()) {
                 continue;
             }
 
-            AtlasIcon.Anchor anchor = resolveHoveredAnchor(icon, minecraft, mapOriginX, mapOriginY, scaledTileSize, mouseX, mouseY);
+            AtlasContents.WaypointData waypoint = atlasWaypoints.get(i);
+            if (!waypoint.dimension().equals(selectedDimension)) {
+                continue;
+            }
+
+            AtlasIcon icon = atlasIcons.get(iconListIndex);
+            AtlasIcon.Anchor anchor = resolveHoveredAnchor(icon, minecraft, visibleTiles, mapOriginX, mapOriginY, scaledTileSize, mouseX, mouseY);
             if (anchor == null) {
                 continue;
             }
@@ -1366,7 +1513,148 @@ public class AtlasScreen extends Screen {
         );
     }
 
-    // ----- Main atlas rendering -----
+     // ----- Main atlas rendering -----
+
+    private record BookmarkTab(int index, String dimension, Identifier iconTexture) {}
+
+    private record BookmarkTabLayout(BookmarkTab tab, float x, float y, float width, float height) {
+        float renderX(boolean selected, float retractionAmount) {
+            return selected ? x : x - retractionAmount;
+        }
+
+        float visibleLeft(float clipLeft, boolean selected, float retractionAmount) {
+            return Math.max(renderX(selected, retractionAmount), clipLeft);
+        }
+
+        float visibleRight(boolean selected, float retractionAmount) {
+            return renderX(selected, retractionAmount) + width;
+        }
+
+        boolean contains(double mouseX, double mouseY, float clipLeft, boolean selected, float retractionAmount) {
+            float left = visibleLeft(clipLeft, selected, retractionAmount);
+            float right = visibleRight(selected, retractionAmount);
+            return mouseX >= left && mouseX < right && mouseY >= y && mouseY < y + height;
+        }
+    }
+
+    private List<BookmarkTab> getBookmarkTabs() {
+        List<BookmarkTab> tabs = new ArrayList<>(dimensionTabs.size());
+        for (int i = 0; i < dimensionTabs.size(); i++) {
+            String dim = dimensionTabs.get(i);
+            Identifier icon = DIMENSION_ICON_MAP.getOrDefault(dim, BOOKMARK_OTHER_ICON_TEXTURE);
+            tabs.add(new BookmarkTab(i, dim, icon));
+        }
+        return tabs;
+    }
+
+    private List<BookmarkTabLayout> getBookmarkTabLayouts(AtlasViewport viewport) {
+        List<BookmarkTab> tabs = getBookmarkTabs();
+        List<BookmarkTabLayout> layouts = new ArrayList<>(tabs.size());
+        float scale = viewport.width() / ATLAS_BACKGROUND_TEXTURE_WIDTH;
+        float scaledTabWidth = BOOKMARK_TAB_WIDTH * scale;
+        float scaledTabHeight = BOOKMARK_TAB_HEIGHT * scale;
+        float scaledTabGap = BOOKMARK_TAB_GAP * scale;
+
+        float mapRight = viewport.contentX() + viewport.contentWidth();
+        float tabX = mapRight - BOOKMARK_TABS_RIGHT_OVERLAP * scale;
+        float tabY = viewport.contentY() + BOOKMARK_TABS_TOP_OFFSET * scale;
+
+        for (BookmarkTab tab : tabs) {
+            layouts.add(new BookmarkTabLayout(tab, tabX, tabY, scaledTabWidth, scaledTabHeight));
+            tabY += scaledTabHeight + scaledTabGap;
+        }
+
+        return layouts;
+    }
+
+    private float getBookmarkRetractionAmount(AtlasViewport viewport) {
+        float scale = viewport.width() / ATLAS_BACKGROUND_TEXTURE_WIDTH;
+        return BOOKMARK_UNSELECTED_RETRACTION_AMOUNT * scale;
+    }
+
+    private int getBookmarkClipLeft(AtlasViewport viewport) {
+        float scale = viewport.width() / ATLAS_BACKGROUND_TEXTURE_WIDTH;
+        float left = Float.POSITIVE_INFINITY;
+        for (BookmarkTabLayout layout : getBookmarkTabLayouts(viewport)) {
+            left = Math.min(left, layout.x());
+        }
+        return Float.isFinite(left)
+                ? (int) Math.floor(left + BOOKMARK_CLIP_LEFT_OFFSET * scale)
+                : 0;
+    }
+
+    private void renderBookmarkTabs(GuiGraphicsExtractor graphics, AtlasViewport viewport, int mouseX, int mouseY) {
+        float retractionAmount = getBookmarkRetractionAmount(viewport);
+        float clipLeft = getBookmarkClipLeft(viewport);
+        float scale = viewport.width() / ATLAS_BACKGROUND_TEXTURE_WIDTH;
+        int iconSize = Math.max(1, Math.round(BOOKMARK_ICON_RENDER_SIZE * scale));
+        for (BookmarkTabLayout layout : getBookmarkTabLayouts(viewport)) {
+            boolean isSelected = layout.tab().index() == selectedBookmarkTab;
+            boolean isHovered = !isSelected && layout.contains(mouseX, mouseY, clipLeft, false, retractionAmount);
+            Identifier bgTexture = isSelected ? BOOKMARK_TAB_SELECTED_TEXTURE : BOOKMARK_TAB_TEXTURE;
+            float renderX = layout.renderX(isSelected, retractionAmount);
+            // Normal unselected: slightly darkened; hovered unselected or selected: full white
+            int bgColor = (isSelected || isHovered) ? 0xFFFFFFFF : 0xFFCCCCCC;
+
+            graphics.pose().pushMatrix();
+            graphics.pose().translate(renderX + layout.width() / 2.0f, layout.y() + layout.height() / 2.0f);
+            graphics.pose().rotate((float) (Math.PI / 2.0));
+
+            graphics.blit(
+                    RenderPipelines.GUI_TEXTURED,
+                    bgTexture,
+                    (int) Math.floor(-layout.width() / 2.0f),
+                    (int) Math.floor(-layout.height() / 2.0f),
+                    0.0f,
+                    0.0f,
+                    (int) Math.ceil(layout.width()),
+                    (int) Math.ceil(layout.height()),
+                    BOOKMARK_TAB_WIDTH,
+                    BOOKMARK_TAB_HEIGHT,
+                    BOOKMARK_TAB_WIDTH,
+                    BOOKMARK_TAB_HEIGHT,
+                    bgColor
+            );
+
+            graphics.pose().rotate((float) (-Math.PI / 2.0));
+            graphics.blit(
+                    RenderPipelines.GUI_TEXTURED,
+                    layout.tab().iconTexture(),
+                    -iconSize / 2,
+                    -iconSize / 2,
+                    0.0f,
+                    0.0f,
+                    iconSize,
+                    iconSize,
+                    BOOKMARK_ICON_TEXTURE_SIZE,
+                    BOOKMARK_ICON_TEXTURE_SIZE,
+                    BOOKMARK_ICON_TEXTURE_SIZE,
+                    BOOKMARK_ICON_TEXTURE_SIZE,
+                    bgColor
+            );
+
+            graphics.pose().popMatrix();
+        }
+    }
+
+    private boolean handleBookmarkTabClick(double mouseX, double mouseY, AtlasViewport viewport) {
+        float clipLeft = getBookmarkClipLeft(viewport);
+        float retractionAmount = getBookmarkRetractionAmount(viewport);
+        for (BookmarkTabLayout layout : getBookmarkTabLayouts(viewport)) {
+            boolean isSelected = layout.tab().index() == selectedBookmarkTab;
+            if (layout.contains(mouseX, mouseY, clipLeft, isSelected, retractionAmount)) {
+                if (!isSelected) {
+                    selectedBookmarkTab = layout.tab().index();
+                    centerOnSelectedDimensionAtCurrentZoom();
+                    closeContextMenu();
+                    playBookmarkTabSound();
+                }
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     @Override
     public void extractRenderState(@NonNull GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
@@ -1381,6 +1669,10 @@ public class AtlasScreen extends Screen {
 
         renderAtlasBackground(graphics, viewport);
 
+        graphics.enableScissor(getBookmarkClipLeft(viewport), 0, this.width, this.height);
+        renderBookmarkTabs(graphics, viewport, mouseX, mouseY);
+        graphics.disableScissor();
+
         int clipX1 = (int) Math.floor(viewport.contentX());
         int clipY1 = (int) Math.floor(viewport.contentY());
         int clipX2 = (int) Math.ceil(viewport.contentX() + viewport.contentWidth());
@@ -1389,7 +1681,12 @@ public class AtlasScreen extends Screen {
 
         renderDashedTileGrid(graphics, viewport, mapOriginX, mapOriginY, scaledTileSize);
 
-        for (AtlasTilePayload tile : tiles) {
+        String selectedDimension = getSelectedDimension();
+        List<AtlasTilePayload> visibleTiles = tiles.stream()
+                .filter(t -> t.dimension().equals(selectedDimension))
+                .toList();
+
+        for (AtlasTilePayload tile : visibleTiles) {
             float x = mapOriginX + tile.tileX() * scaledTileSize;
             float y = mapOriginY + tile.tileY() * scaledTileSize;
 
@@ -1412,8 +1709,16 @@ public class AtlasScreen extends Screen {
             if (editingWaypointIndex >= 0 && iconListIndex == editingWaypointIndex + 1) {
                 continue;
             }
+            // Skip waypoints not in the selected dimension
+            int waypointIndexInList = iconListIndex - 1;
+            if (waypointIndexInList < atlasWaypoints.size()) {
+                AtlasContents.WaypointData wp = atlasWaypoints.get(waypointIndexInList);
+                if (!wp.dimension().equals(selectedDimension)) {
+                    continue;
+                }
+            }
             AtlasIcon atlasIcon = atlasIcons.get(iconListIndex);
-            atlasIcon.render(graphics, minecraft, tiles, mapOriginX, mapOriginY, scaledTileSize);
+            atlasIcon.render(graphics, minecraft, visibleTiles, mapOriginX, mapOriginY, scaledTileSize);
         }
 
         renderPinnedWaypointMarkers(graphics, minecraft, mapOriginX, mapOriginY, scaledTileSize);
@@ -1421,16 +1726,19 @@ public class AtlasScreen extends Screen {
         if (waypointDraft != null && !waypointIconOptions.isEmpty()) {
             Component draftTitle = Component.literal(waypointDraft.name.isBlank() ? "Waypoint" : waypointDraft.name);
             AtlasIcon draftIcon = createWaypointIcon(waypointDraft.worldX, waypointDraft.worldZ, draftTitle, waypointDraft.iconIndex);
-            draftIcon.render(graphics, minecraft, tiles, mapOriginX, mapOriginY, scaledTileSize);
+            draftIcon.render(graphics, minecraft, visibleTiles, mapOriginX, mapOriginY, scaledTileSize);
         }
 
         // Draw the player marker last so it stays visible above waypoint markers.
-        playerIcon.render(graphics, minecraft, tiles, mapOriginX, mapOriginY, scaledTileSize);
+        // Only show player marker in the player's current dimension
+        if (selectedDimension.equals(playerDimension)) {
+            playerIcon.render(graphics, minecraft, visibleTiles, mapOriginX, mapOriginY, scaledTileSize);
+        }
 
         // Don't show hovered icon titles when the waypoint draft menu is open
         if (waypointDraft == null) {
             hoveredIcon = mouseWithinAtlasContent
-                    ? findHoveredIcon(minecraft, mapOriginX, mapOriginY, scaledTileSize, mouseX, mouseY)
+                    ? findHoveredIcon(minecraft, mapOriginX, mapOriginY, scaledTileSize, mouseX, mouseY, selectedDimension, visibleTiles)
                     : null;
             if (hoveredIcon != null) {
                 renderHoveredIconTitle(graphics, viewport, hoveredIcon);
@@ -1460,7 +1768,7 @@ public class AtlasScreen extends Screen {
                     pinWaypointToLocatorBar(waypointIndex);
                 }
             }
-            case 1 -> teleportToLocation(waypoint.worldX(), waypoint.worldZ());
+            case 1 -> teleportToLocation(waypoint.worldX(), waypoint.worldZ(), waypoint.dimension());
             case 2 -> copyCoordinatesToClipboard(waypoint.worldX(), waypoint.worldZ());
             case 3 -> beginEditWaypoint(waypointIndex);
             case 4 -> deleteWaypoint(waypointIndex);
@@ -1471,7 +1779,11 @@ public class AtlasScreen extends Screen {
 
     private void handleWorldPointContextMenuOption(int option, WorldPoint worldPoint) {
         switch (option) {
-            case 0 -> teleportToLocation(worldPoint.x(), worldPoint.z());
+            case 0 -> {
+                // Teleport to the selected dimension's coordinates
+                String selectedDimension = getSelectedDimension();
+                teleportToLocation(worldPoint.x(), worldPoint.z(), selectedDimension);
+            }
             case 1 -> beginNewWaypoint(worldPoint);
             case 2 -> copyCoordinatesToClipboard(worldPoint.x(), worldPoint.z());
             default -> {
@@ -1480,12 +1792,30 @@ public class AtlasScreen extends Screen {
         }
     }
 
+    private String getSelectedDimension() {
+        return (selectedBookmarkTab < dimensionTabs.size())
+                ? dimensionTabs.get(selectedBookmarkTab)
+                : (dimensionTabs.isEmpty() ? "minecraft:overworld" : dimensionTabs.getFirst());
+    }
+
+    private List<AtlasTilePayload> getVisibleTilesForDimension(String dimension) {
+        return tiles.stream()
+                .filter(t -> t.dimension().equals(dimension))
+                .toList();
+    }
+
     // ----- Screen input + lifecycle overrides -----
 
     // Mouse
 
     @Override
     public boolean mouseClicked(@NonNull MouseButtonEvent event, boolean doubleClick) {
+        // Check bookmark tabs first
+        AtlasViewport viewport = getAtlasViewport();
+        if (event.button() == 0 && handleBookmarkTabClick(event.x(), event.y(), viewport)) {
+            return true;
+        }
+
         if (waypointDraft != null) {
             super.mouseClicked(event, doubleClick);
             return true;
@@ -1515,7 +1845,6 @@ public class AtlasScreen extends Screen {
         }
 
         if (event.button() == 0 && waypointDraft == null && !isContextMenuOpen()) {
-            AtlasViewport viewport = getAtlasViewport();
             if (isWithinAtlasContent(viewport, event.x(), event.y())) {
                 leftDragging = true;
                 return true;

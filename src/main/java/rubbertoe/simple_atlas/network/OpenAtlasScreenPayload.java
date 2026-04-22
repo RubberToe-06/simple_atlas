@@ -17,7 +17,8 @@ public record OpenAtlasScreenPayload(
         List<Integer> atlasMapIds,
         List<AtlasContents.WaypointData> waypoints,
         int selectedWaypointIconIndex,
-        int nextWaypointNumber
+        int nextWaypointNumber,
+        String playerDimension
 ) implements CustomPacketPayload {
 
     public static final Identifier ID = Identifier.fromNamespaceAndPath(SimpleAtlas.MOD_ID, "open_atlas_screen");
@@ -30,6 +31,7 @@ public record OpenAtlasScreenPayload(
                     ByteBufCodecs.INT, AtlasTilePayload::centerZ,
                     ByteBufCodecs.INT, AtlasTilePayload::tileX,
                     ByteBufCodecs.INT, AtlasTilePayload::tileY,
+                    ByteBufCodecs.stringUtf8(256), AtlasTilePayload::dimension,
                     AtlasTilePayload::new
             );
 
@@ -43,6 +45,8 @@ public record OpenAtlasScreenPayload(
                     AtlasContents.WaypointData::name,
                     ByteBufCodecs.INT,
                     AtlasContents.WaypointData::iconIndex,
+                    ByteBufCodecs.stringUtf8(256),
+                    AtlasContents.WaypointData::dimension,
                     AtlasContents.WaypointData::new
             );
 
@@ -58,6 +62,8 @@ public record OpenAtlasScreenPayload(
                     OpenAtlasScreenPayload::selectedWaypointIconIndex,
                     ByteBufCodecs.INT,
                     OpenAtlasScreenPayload::nextWaypointNumber,
+                    ByteBufCodecs.stringUtf8(256),
+                    OpenAtlasScreenPayload::playerDimension,
                     OpenAtlasScreenPayload::new
             );
 

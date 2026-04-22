@@ -249,7 +249,8 @@ public final class ModNetworking {
                     waypoint.worldX(),
                     waypoint.worldZ(),
                     waypoint.name(),
-                    waypoint.iconIndex()
+                    waypoint.iconIndex(),
+                    waypoint.dimension()
             ));
         }
         return sanitized;

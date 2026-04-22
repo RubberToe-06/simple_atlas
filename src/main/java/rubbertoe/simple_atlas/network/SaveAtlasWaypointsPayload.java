@@ -31,6 +31,8 @@ public record SaveAtlasWaypointsPayload(
                     AtlasContents.WaypointData::name,
                     ByteBufCodecs.INT,
                     AtlasContents.WaypointData::iconIndex,
+                    ByteBufCodecs.stringUtf8(256),
+                    AtlasContents.WaypointData::dimension,
                     AtlasContents.WaypointData::new
             );
 

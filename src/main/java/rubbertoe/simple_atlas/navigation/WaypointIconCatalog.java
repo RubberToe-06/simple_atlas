@@ -60,7 +60,7 @@ public final class WaypointIconCatalog {
 
     private WaypointIconCatalog() {}
 
-    public static List<String> iconKeys() {
+    public static List<String> getAvailableIconKeys() {
         return ICON_KEYS;
     }
 

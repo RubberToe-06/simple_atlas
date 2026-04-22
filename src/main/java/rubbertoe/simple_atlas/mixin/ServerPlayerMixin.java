@@ -28,6 +28,11 @@ public abstract class ServerPlayerMixin {
 
         ServerPlayer player = simple_atlas$self();
         MapId mapId = itemStack.get(DataComponents.MAP_ID);
+        if (mapId == null) {
+            ci.cancel();
+            return;
+        }
+
         MapItemSavedData mapData = MapItem.getSavedData(mapId, player.level());
         if (mapData == null) {
             ci.cancel();

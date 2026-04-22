@@ -5,6 +5,7 @@ public record AtlasTilePayload(
         int centerX,
         int centerZ,
         int tileX,
-        int tileY
+        int tileY,
+        String dimension
 ) {}
 

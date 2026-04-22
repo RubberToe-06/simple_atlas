@@ -14,13 +14,14 @@ public final class AtlasContents {
 
     private static final int MAX_WAYPOINT_NAME_LENGTH = 32;
 
-    public record WaypointData(double worldX, double worldZ, String name, int iconIndex) {
+    public record WaypointData(double worldX, double worldZ, String name, int iconIndex, String dimension) {
         public static final Codec<WaypointData> CODEC = RecordCodecBuilder.create(instance ->
                 instance.group(
                         Codec.DOUBLE.fieldOf("world_x").forGetter(WaypointData::worldX),
                         Codec.DOUBLE.fieldOf("world_z").forGetter(WaypointData::worldZ),
                         Codec.STRING.fieldOf("name").forGetter(WaypointData::name),
-                        Codec.INT.fieldOf("icon_index").forGetter(WaypointData::iconIndex)
+                        Codec.INT.fieldOf("icon_index").forGetter(WaypointData::iconIndex),
+                        Codec.STRING.optionalFieldOf("dimension", "minecraft:overworld").forGetter(WaypointData::dimension)
                 ).apply(instance, WaypointData::new)
         );
 

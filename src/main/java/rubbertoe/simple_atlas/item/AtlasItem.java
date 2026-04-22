@@ -79,12 +79,14 @@ public class AtlasItem extends Item {
         int bannerIconIndex = WaypointIconCatalog.bannerIconIndexForColor(banner.getBaseColor());
         String customName = banner.getCustomName() != null ? banner.getCustomName().getString() : "";
         String waypointName = customName.isBlank() ? "Banner " + contents.nextWaypointNumber() : customName;
+        String dimensionKey = ((ServerLevel) level).getLevel().dimension().identifier().toString();
 
         AtlasContents.WaypointData waypoint = new AtlasContents.WaypointData(
                 bannerPos.getX() + 0.5,
                 bannerPos.getZ() + 0.5,
                 waypointName,
-                bannerIconIndex
+                bannerIconIndex,
+                dimensionKey
         );
 
         AtlasContents updated = withAppendedWaypoint(contents, waypoint);
@@ -154,7 +156,7 @@ public class AtlasItem extends Item {
 
         syncAtlasMapsToPlayer((ServerPlayer) player, serverLevel, contents);
         AtlasViewManager.startViewing((ServerPlayer) player, contents.mapIds());
-        ServerPlayNetworking.send((ServerPlayer) player, createOpenPayload(serverLevel, contents));
+        ServerPlayNetworking.send((ServerPlayer) player, createOpenPayload((ServerPlayer) player, serverLevel, contents));
 
 
         return InteractionResult.SUCCESS;
@@ -204,22 +206,33 @@ public class AtlasItem extends Item {
     }
 
 
-    public static OpenAtlasScreenPayload createOpenPayload(ServerLevel level, AtlasContents contents) {
+    public static OpenAtlasScreenPayload createOpenPayload(ServerPlayer player, ServerLevel level, AtlasContents contents) {
         AtlasLayout layout = AtlasLayoutBuilder.build(level, contents);
+        String overworldKey = net.minecraft.world.level.Level.OVERWORLD.identifier().toString();
+        String playerDimension = player.level().dimension().identifier().toString();
         return new OpenAtlasScreenPayload(
                 layout.entries().stream()
-                        .map(entry -> new AtlasTilePayload(
-                                entry.mapId(),
-                                entry.centerX(),
-                                entry.centerZ(),
-                                entry.tileX(),
-                                entry.tileY()
-                        ))
+                        .map(entry -> {
+                            net.minecraft.world.level.saveddata.maps.MapItemSavedData mapData =
+                                    level.getMapData(new net.minecraft.world.level.saveddata.maps.MapId(entry.mapId()));
+                            String dimension = (mapData != null)
+                                    ? mapData.dimension.identifier().toString()
+                                    : overworldKey;
+                            return new AtlasTilePayload(
+                                    entry.mapId(),
+                                    entry.centerX(),
+                                    entry.centerZ(),
+                                    entry.tileX(),
+                                    entry.tileY(),
+                                    dimension
+                            );
+                        })
                         .toList(),
                 contents.mapIds(),
                 contents.waypoints(),
                 contents.selectedWaypointIconIndex(),
-                contents.nextWaypointNumber()
+                contents.nextWaypointNumber(),
+                playerDimension
         );
     }
 

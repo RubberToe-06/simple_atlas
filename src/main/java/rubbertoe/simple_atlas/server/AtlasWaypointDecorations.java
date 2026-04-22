@@ -89,7 +89,7 @@ public final class AtlasWaypointDecorations {
     }
 
     private static Holder<MapDecorationType> decorationTypeForWaypoint(int iconIndex) {
-        String key = WaypointIconCatalog.iconKeys().get(WaypointIconCatalog.sanitizeIconIndex(iconIndex));
+        String key = WaypointIconCatalog.getAvailableIconKeys().get(WaypointIconCatalog.sanitizeIconIndex(iconIndex));
         return switch (key) {
             case "home" -> ModMapDecorationTypes.HOME;
             case "nether_portal" -> ModMapDecorationTypes.NETHER_PORTAL;
