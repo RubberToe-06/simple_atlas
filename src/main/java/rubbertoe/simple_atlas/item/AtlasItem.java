@@ -65,7 +65,7 @@ public class AtlasItem extends Item {
 
         if (contents.waypoints().size() >= ModNetworking.MAX_WAYPOINT_COUNT) {
             player.sendSystemMessage(
-                    Component.literal("Atlas waypoint limit reached (" + ModNetworking.MAX_WAYPOINT_COUNT + ")")
+                    Component.translatable("message.simple_atlas.waypoint_limit_reached", ModNetworking.MAX_WAYPOINT_COUNT)
                             .withStyle(ChatFormatting.RED)
             );
             return InteractionResult.SUCCESS_SERVER;
@@ -111,7 +111,7 @@ public class AtlasItem extends Item {
 
         if (contents.mapIds().isEmpty()) {
             tooltipComponents.accept(
-                    Component.literal("No maps inserted")
+                    Component.translatable("tooltip.simple_atlas.no_maps")
                             .withStyle(ChatFormatting.GRAY)
             );
         } else {
@@ -121,7 +121,7 @@ public class AtlasItem extends Item {
                 int scaleLevel = mapData.scale;
                 int scaleRatio = 1 << scaleLevel;
                 tooltipComponents.accept(
-                        Component.literal("Scale: "+"(1:" + scaleRatio + ")")
+                        Component.translatable("tooltip.simple_atlas.scale", scaleRatio)
                                 .withStyle(ChatFormatting.GRAY)
                 );
             }
@@ -148,7 +148,7 @@ public class AtlasItem extends Item {
 
         if (contents.mapIds().isEmpty()) {
             player.sendSystemMessage(
-                    Component.literal("Your atlas has no maps inserted")
+                    Component.translatable("message.simple_atlas.no_maps_inserted")
                             .withStyle(ChatFormatting.YELLOW)
             );
             return InteractionResult.SUCCESS;
