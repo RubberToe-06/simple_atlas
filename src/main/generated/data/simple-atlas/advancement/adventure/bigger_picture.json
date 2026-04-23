@@ -1,0 +1,28 @@
+{
+  "parent": "simple-atlas:adventure/craft_atlas",
+  "criteria": {
+    "scaled_atlas": {
+      "conditions": {
+        "action": "scale"
+      },
+      "trigger": "simple-atlas:atlas_cartography_action"
+    }
+  },
+  "display": {
+    "description": {
+      "translate": "advancements.simple-atlas.adventure.bigger_picture.description"
+    },
+    "icon": {
+      "id": "minecraft:spyglass"
+    },
+    "title": {
+      "translate": "advancements.simple-atlas.adventure.bigger_picture.title"
+    }
+  },
+  "requirements": [
+    [
+      "scaled_atlas"
+    ]
+  ],
+  "sends_telemetry_event": true
+}

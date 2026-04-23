@@ -62,6 +62,9 @@ public class AtlasCartographyActionTrigger extends SimpleCriterionTrigger<AtlasC
         public static Criterion<TriggerInstance> mergedAtlases() {
             return INSTANCE.createCriterion(new TriggerInstance(Optional.empty(), Optional.of(Action.MERGE)));
         }
+
+        public static Criterion<TriggerInstance> scaledAtlas() {
+            return INSTANCE.createCriterion(new TriggerInstance(Optional.empty(), Optional.of(Action.SCALE)));
+        }
     }
 }
-
