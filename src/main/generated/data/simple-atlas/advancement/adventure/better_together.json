@@ -1,0 +1,28 @@
+{
+  "parent": "simple-atlas:adventure/craft_atlas",
+  "criteria": {
+    "merged_atlases": {
+      "conditions": {
+        "action": "merge"
+      },
+      "trigger": "simple-atlas:atlas_cartography_action"
+    }
+  },
+  "display": {
+    "description": {
+      "translate": "advancements.simple-atlas.adventure.better_together.description"
+    },
+    "icon": {
+      "id": "minecraft:cartography_table"
+    },
+    "title": {
+      "translate": "advancements.simple-atlas.adventure.better_together.title"
+    }
+  },
+  "requirements": [
+    [
+      "merged_atlases"
+    ]
+  ],
+  "sends_telemetry_event": true
+}

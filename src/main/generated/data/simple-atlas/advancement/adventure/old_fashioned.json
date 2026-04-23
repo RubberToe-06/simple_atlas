@@ -1,0 +1,25 @@
+{
+  "parent": "simple-atlas:adventure/craft_atlas",
+  "criteria": {
+    "added_waypoint_via_banner": {
+      "trigger": "simple-atlas:waypoint_added_via_banner"
+    }
+  },
+  "display": {
+    "description": {
+      "translate": "advancements.simple-atlas.adventure.old_fashioned.description"
+    },
+    "icon": {
+      "id": "minecraft:white_banner"
+    },
+    "title": {
+      "translate": "advancements.simple-atlas.adventure.old_fashioned.title"
+    }
+  },
+  "requirements": [
+    [
+      "added_waypoint_via_banner"
+    ]
+  ],
+  "sends_telemetry_event": true
+}

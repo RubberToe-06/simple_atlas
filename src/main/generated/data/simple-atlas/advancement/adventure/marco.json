@@ -1,0 +1,25 @@
+{
+  "parent": "simple-atlas:adventure/craft_atlas",
+  "criteria": {
+    "pinned_waypoint": {
+      "trigger": "simple-atlas:waypoint_pinned_to_locator_bar"
+    }
+  },
+  "display": {
+    "description": {
+      "translate": "advancements.simple-atlas.adventure.marco.description"
+    },
+    "icon": {
+      "id": "minecraft:compass"
+    },
+    "title": {
+      "translate": "advancements.simple-atlas.adventure.marco.title"
+    }
+  },
+  "requirements": [
+    [
+      "pinned_waypoint"
+    ]
+  ],
+  "sends_telemetry_event": true
+}

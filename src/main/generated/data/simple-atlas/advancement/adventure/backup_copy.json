@@ -1,0 +1,28 @@
+{
+  "parent": "simple-atlas:adventure/craft_atlas",
+  "criteria": {
+    "duplicated_atlas": {
+      "conditions": {
+        "action": "duplicate"
+      },
+      "trigger": "simple-atlas:atlas_cartography_action"
+    }
+  },
+  "display": {
+    "description": {
+      "translate": "advancements.simple-atlas.adventure.backup_copy.description"
+    },
+    "icon": {
+      "id": "minecraft:book"
+    },
+    "title": {
+      "translate": "advancements.simple-atlas.adventure.backup_copy.title"
+    }
+  },
+  "requirements": [
+    [
+      "duplicated_atlas"
+    ]
+  ],
+  "sends_telemetry_event": true
+}
