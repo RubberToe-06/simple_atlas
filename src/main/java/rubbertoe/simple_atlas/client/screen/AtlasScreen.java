@@ -310,7 +310,7 @@ public class AtlasScreen extends Screen {
             int nextWaypointNumber,
             String playerDimension
     ) {
-        super(Component.literal("Atlas"));
+        super(Component.translatable("screen.simple_atlas.atlas.title"));
         this.tiles = new ArrayList<>(tiles);
         this.atlasMapIds = new ArrayList<>(atlasMapIds);
         this.atlasWaypoints = new ArrayList<>(waypoints);
@@ -636,7 +636,7 @@ public class AtlasScreen extends Screen {
         Minecraft minecraft = Minecraft.getInstance();
         minecraft.keyboardHandler.setClipboard(blockX + ", " + blockZ);
         if (minecraft.player != null) {
-            minecraft.player.sendSystemMessage(Component.literal("Copied coordinates: " + blockX + ", " + blockZ));
+            minecraft.player.sendSystemMessage(Component.translatable("message.simple_atlas.coordinates_copied", blockX, blockZ));
         }
     }
 
@@ -967,7 +967,7 @@ public class AtlasScreen extends Screen {
                 this.font,
                 layout.inputX(), layout.inputY(),
                 inputWidth, inputHeight,
-                Component.literal("Waypoint name")
+                Component.translatable("gui.simple_atlas.waypoint_name")
         );
         waypointNameEditBox.setMaxLength(WAYPOINT_NAME_MAX_LENGTH);
         waypointNameEditBox.setValue(initialValue);
@@ -1068,7 +1068,7 @@ public class AtlasScreen extends Screen {
                 layout.cancelButtonY(),
                 layout.cancelButtonX2() - layout.cancelButtonX(),
                 layout.cancelButtonY2() - layout.cancelButtonY(),
-                Component.literal("Cancel"),
+                Component.translatable("gui.simple_atlas.cancel"),
                 ignored -> clearWaypointDraft()
         );
         confirmWaypointButton = createDraftControlButton(
@@ -1076,7 +1076,7 @@ public class AtlasScreen extends Screen {
                 layout.confirmButtonY(),
                 layout.confirmButtonX2() - layout.confirmButtonX(),
                 layout.confirmButtonY2() - layout.confirmButtonY(),
-                Component.literal("Confirm"),
+                Component.translatable("gui.simple_atlas.confirm"),
                 ignored -> commitWaypointDraft()
         );
 
@@ -1124,20 +1124,20 @@ public class AtlasScreen extends Screen {
         if (contextMenuWaypointIndex >= 0) {
             int waypointIndex = contextMenuWaypointIndex;
             boolean pinnedThisWaypoint = isWaypointPinnedToLocatorBar(waypointIndex);
-            addWaypointContextMenuButton(0, Component.literal(pinnedThisWaypoint ? "Stop Locating" : "Locate"), pinnedThisWaypoint ? 0xFFFFB366 : 0xFF8FE0FF, waypointIndex);
-            addWaypointContextMenuButton(1, Component.literal("Teleport"), 0xFFFF5EFF, waypointIndex);
-            addWaypointContextMenuButton(2, Component.literal("Copy coordinates"), 0xFFFFFFFF, waypointIndex);
-            addWaypointContextMenuButton(3, Component.literal("Edit waypoint"), 0xFFFFFFFF, waypointIndex);
-            addWaypointContextMenuButton(4, Component.literal("Delete waypoint"), 0xFFFF8080, waypointIndex);
+            addWaypointContextMenuButton(0, Component.translatable(pinnedThisWaypoint ? "menu.simple_atlas.waypoint.stop_locating" : "menu.simple_atlas.waypoint.locate"), pinnedThisWaypoint ? 0xFFFFB366 : 0xFF8FE0FF, waypointIndex);
+            addWaypointContextMenuButton(1, Component.translatable("menu.simple_atlas.teleport"), 0xFFFF5EFF, waypointIndex);
+            addWaypointContextMenuButton(2, Component.translatable("menu.simple_atlas.copy_coordinates"), 0xFFFFFFFF, waypointIndex);
+            addWaypointContextMenuButton(3, Component.translatable("menu.simple_atlas.waypoint.edit"), 0xFFFFFFFF, waypointIndex);
+            addWaypointContextMenuButton(4, Component.translatable("menu.simple_atlas.waypoint.delete"), 0xFFFF8080, waypointIndex);
             return;
         }
 
         if (contextMenuWorldPoint != null) {
             WorldPoint worldPoint = contextMenuWorldPoint;
-            addWorldContextMenuButton(0, Component.literal("Teleport"), 0xFFFF5EFF, worldPoint);
-            addWorldContextMenuButton(1, Component.literal("New waypoint"), 0xFFFFFFFF, worldPoint);
-            addWorldContextMenuButton(2, Component.literal("Copy coordinates"), 0xFFFFFFFF, worldPoint);
-            addWorldContextMenuButton(3, Component.literal("Remove map from atlas"), 0xFFFF8080, worldPoint);
+            addWorldContextMenuButton(0, Component.translatable("menu.simple_atlas.teleport"), 0xFFFF5EFF, worldPoint);
+            addWorldContextMenuButton(1, Component.translatable("menu.simple_atlas.map.new_waypoint"), 0xFFFFFFFF, worldPoint);
+            addWorldContextMenuButton(2, Component.translatable("menu.simple_atlas.copy_coordinates"), 0xFFFFFFFF, worldPoint);
+            addWorldContextMenuButton(3, Component.translatable("menu.simple_atlas.map.remove"), 0xFFFF8080, worldPoint);
         }
     }
 
@@ -1513,9 +1513,12 @@ public class AtlasScreen extends Screen {
         WaypointPickerLayout layout = getWaypointPickerLayout(viewport);
         drawFramedPanel(graphics, layout.panelX(), layout.panelY(), layout.panelX2(), layout.panelY2(), 0xB0101010, 0xFF606060);
 
-        String title = editingWaypointIndex >= 0 ? "Edit Waypoint" : "New Waypoint";
-        int titleX = layout.panelX() + (layout.panelX2() - layout.panelX() - this.font.width(title)) / 2;
-        graphics.textWithBackdrop(this.font, Component.literal(title), titleX, layout.panelY() + 6, this.font.width(title), 0xFFFFFFFF);
+        Component title = Component.translatable(editingWaypointIndex >= 0
+                ? "gui.simple_atlas.waypoint.edit_title"
+                : "gui.simple_atlas.waypoint.new_title");
+        int titleWidth = this.font.width(title);
+        int titleX = layout.panelX() + (layout.panelX2() - layout.panelX() - titleWidth) / 2;
+        graphics.textWithBackdrop(this.font, title, titleX, layout.panelY() + 6, titleWidth, 0xFFFFFFFF);
 
         graphics.fill(layout.iconX() - 2, layout.iconY() - 2, layout.iconX() + WAYPOINT_PICKER_PREVIEW_SIZE + 2, layout.iconY() + WAYPOINT_PICKER_PREVIEW_SIZE + 2, 0x70000000);
         graphics.blit(
@@ -1810,7 +1813,9 @@ public class AtlasScreen extends Screen {
         renderPinnedWaypointMarkers(graphics, minecraft, mapOriginX, mapOriginY, scaledTileSize);
 
         if (waypointDraft != null && !waypointIconOptions.isEmpty()) {
-            Component draftTitle = Component.literal(waypointDraft.name.isBlank() ? "Waypoint" : waypointDraft.name);
+            Component draftTitle = waypointDraft.name.isBlank()
+                    ? Component.translatable("gui.simple_atlas.waypoint.default_name")
+                    : Component.literal(waypointDraft.name);
             AtlasIcon draftIcon = createWaypointIcon(waypointDraft.worldX, waypointDraft.worldZ, draftTitle, waypointDraft.iconIndex);
             draftIcon.render(graphics, minecraft, visibleTiles, mapOriginX, mapOriginY, scaledTileSize);
         }

@@ -3,15 +3,14 @@
 	"id": "simple-atlas",
 	"version": "${version}",
 	"name": "Simple Atlas",
-	"description": "Adds an Atlas so you can take all your maps with you",
+	"description": "Adds a no-nonsense Vanilla+ atlas for all your mapping needs.",
 	"authors": [
 		"RubberToe"
 	],
 	"contact": {
-		"homepage": "https://fabricmc.net/",
-		"sources": "https://github.com/FabricMC/fabric-example-mod"
+		"sources": "https://github.com/RubberToe-06/simple_atlas"
 	},
-	"license": "CC0-1.0",
+	"license": "MIT",
 	"icon": "assets/simple-atlas/icon.png",
 	"environment": "*",
 	"entrypoints": {
