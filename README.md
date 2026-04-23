@@ -1,3 +1,4 @@
+
 # Simple Atlas
 
 Carry your mapped world in one item.
@@ -48,19 +49,15 @@ Simple Atlas adds an **Atlas** item that stores multiple filled maps and opens i
 ## How to use
 
 1. Craft an Atlas.
-2. Use the cartography table to add maps, duplicate atlases with books, scale atlases with paper, or merge equal-size atlases.
+2. Use the cartography table to add maps, duplicate atlases with books, scale atlases with paper, or merge equal-scale atlases.
 3. Hold the atlas in your main hand and use it to open the atlas screen.
 4. Scroll, drag, and switch dimension tabs to inspect your mapped area.
 5. Right-click map points or waypoints to manage waypoints, copy coordinates, remove maps, and optional navigation.
 
 ## Recipe
 
-Shapeless:
-
-- Book
-- Feather
-- Compass
-- Map
+![Atlas crafting recipe](https://cdn.modrinth.com/data/cached_images/680b305403d8fe874f9c1d265f99f98b5e1a3cea.png)
+- shapeless
 
 ## Compatibility
 
@@ -71,7 +68,7 @@ Shapeless:
 
 ## Notes
 
-- The atlas layout expects maps of the same scale.
+- The atlas layout expects maps of the same scale and will scale up smaller maps, but larger ones will be rejected
 - Waypoint and navigation state is tied to each atlas item.
 - Teleport actions in the atlas UI use player commands and may require permission depending on the server.
 - Designed for both singleplayer and multiplayer survival workflows.
