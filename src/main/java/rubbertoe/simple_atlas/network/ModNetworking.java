@@ -10,6 +10,7 @@ import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientboundMapItemDataPacket;
 import net.minecraft.network.protocol.game.ClientboundTrackedWaypointPacket;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.saveddata.maps.MapDecoration;
 import net.minecraft.world.level.saveddata.maps.MapId;
 import net.minecraft.world.level.saveddata.maps.MapItemSavedData;
@@ -62,6 +63,10 @@ public final class ModNetworking {
         PayloadTypeRegistry.serverboundPlay().register(
                 UnpinWaypointPayload.TYPE,
                 UnpinWaypointPayload.CODEC
+        );
+        PayloadTypeRegistry.serverboundPlay().register(
+                RemoveAtlasMapPayload.TYPE,
+                RemoveAtlasMapPayload.CODEC
         );
         ServerPlayNetworking.registerGlobalReceiver(
                 CloseAtlasViewPayload.TYPE,
@@ -137,6 +142,32 @@ public final class ModNetworking {
                     }
 
                     sendRemovedPinnedWaypoint(player, unpinNavigationId);
+                })
+        );
+        ServerPlayNetworking.registerGlobalReceiver(
+                RemoveAtlasMapPayload.TYPE,
+                (payload, context) -> context.server().execute(() -> {
+                    var player = context.player();
+                    ItemStack atlasStack = player.getMainHandItem();
+                    if (!atlasStack.is(ModItems.ATLAS)) {
+                        return;
+                    }
+
+                    AtlasContents contents = atlasStack.getOrDefault(ModComponents.ATLAS_CONTENTS, AtlasContents.EMPTY);
+                    if (!contents.mapIds().equals(payload.atlasMapIds())) {
+                        return;
+                    }
+
+                    AtlasContents updated = removeMapFromAtlas(player, contents, payload.mapId());
+                    if (updated == null) {
+                        return;
+                    }
+
+                    atlasStack.set(ModComponents.ATLAS_CONTENTS, updated);
+                    giveRemovedMapToPlayer(player, payload.mapId());
+                    sendMapRefreshWithoutAtlasWaypoints(player, payload.mapId());
+                    reconcilePinnedWaypoints(player, updated.waypoints());
+                    sendImmediateWaypointRefresh(player, updated);
                 })
         );
         ServerPlayConnectionEvents.DISCONNECT.register((handler, _) ->
@@ -254,6 +285,88 @@ public final class ModNetworking {
             ));
         }
         return sanitized;
+    }
+
+    private static AtlasContents removeMapFromAtlas(
+            net.minecraft.server.level.ServerPlayer player,
+            AtlasContents contents,
+            int removedMapId
+    ) {
+        if (!contents.contains(removedMapId)) {
+            return null;
+        }
+
+        MapItemSavedData removedMapData = player.level().getMapData(new MapId(removedMapId));
+        if (removedMapData == null) {
+            return null;
+        }
+
+        List<Integer> updatedMapIds = new ArrayList<>(Math.max(0, contents.mapIds().size() - 1));
+        for (int mapId : contents.mapIds()) {
+            if (mapId != removedMapId) {
+                updatedMapIds.add(mapId);
+            }
+        }
+
+        List<AtlasContents.WaypointData> filteredWaypoints = contents.waypoints().stream()
+                .filter(waypoint -> !isWaypointOnMap(waypoint, removedMapData))
+                .toList();
+
+        return new AtlasContents(
+                updatedMapIds,
+                filteredWaypoints,
+                contents.selectedWaypointIconIndex(),
+                contents.nextWaypointNumber(),
+                0
+        );
+    }
+
+    private static boolean isWaypointOnMap(AtlasContents.WaypointData waypoint, MapItemSavedData mapData) {
+        String mapDimension = mapData.dimension.identifier().toString();
+        if (!mapDimension.equals(waypoint.dimension())) {
+            return false;
+        }
+
+        int mapSpan = 128 << mapData.scale;
+        double minX = mapData.centerX - mapSpan / 2.0;
+        double minZ = mapData.centerZ - mapSpan / 2.0;
+        double maxX = minX + mapSpan;
+        double maxZ = minZ + mapSpan;
+
+        return waypoint.worldX() >= minX
+                && waypoint.worldX() < maxX
+                && waypoint.worldZ() >= minZ
+                && waypoint.worldZ() < maxZ;
+    }
+
+    private static void giveRemovedMapToPlayer(net.minecraft.server.level.ServerPlayer player, int removedMapId) {
+        ItemStack removedMap = new ItemStack(Items.FILLED_MAP);
+        removedMap.set(DataComponents.MAP_ID, new MapId(removedMapId));
+
+        if (!player.getInventory().add(removedMap)) {
+            player.drop(removedMap, false);
+        }
+    }
+
+    private static void sendMapRefreshWithoutAtlasWaypoints(net.minecraft.server.level.ServerPlayer player, int rawMapId) {
+        MapId mapId = new MapId(rawMapId);
+        MapItemSavedData mapData = player.level().getMapData(mapId);
+        if (mapData == null) {
+            return;
+        }
+
+        mapData.getHoldingPlayer(player);
+        List<MapDecoration> currentDecorations = new ArrayList<>();
+        mapData.getDecorations().forEach(currentDecorations::add);
+
+        Packet<?> packet = new ClientboundMapItemDataPacket(
+                mapId,
+                mapData.scale,
+                mapData.locked,
+                currentDecorations,
+                null
+        );
+        player.connection.send(packet);
     }
 
     private static void sendImmediateWaypointRefresh(net.minecraft.server.level.ServerPlayer player, AtlasContents contents) {

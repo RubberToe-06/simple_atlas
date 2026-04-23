@@ -32,6 +32,7 @@ import rubbertoe.simple_atlas.network.AtlasTilePayload;
 import rubbertoe.simple_atlas.network.CloseAtlasViewPayload;
 import rubbertoe.simple_atlas.network.NavigateToWaypointPayload;
 import rubbertoe.simple_atlas.network.OpenAtlasScreenPayload;
+import rubbertoe.simple_atlas.network.RemoveAtlasMapPayload;
 import rubbertoe.simple_atlas.network.SaveAtlasWaypointsPayload;
 import rubbertoe.simple_atlas.network.UnpinWaypointPayload;
 import rubbertoe.simple_atlas.navigation.WaypointIconCatalog;
@@ -101,7 +102,7 @@ public class AtlasScreen extends Screen {
     private static final int WAYPOINT_CONTEXT_MENU_WIDTH = 132;
     private static final int WAYPOINT_CONTEXT_MENU_ROW_HEIGHT = 14;
     private static final int WAYPOINT_CONTEXT_MENU_WAYPOINT_ROWS = 5;
-    private static final int WAYPOINT_CONTEXT_MENU_MAP_ROWS = 3;
+    private static final int WAYPOINT_CONTEXT_MENU_MAP_ROWS = 4;
 
     // Map viewport rendering
     private static final int ICON_HOVER_TITLE_PADDING = 4;
@@ -144,6 +145,7 @@ public class AtlasScreen extends Screen {
     private int contextMenuX;
     private int contextMenuY;
     private @Nullable WorldPoint contextMenuWorldPoint;
+    private int contextMenuMapId = -1;
 
     // Overlay widgets
     private @Nullable EditBox waypointNameEditBox = null;
@@ -309,8 +311,8 @@ public class AtlasScreen extends Screen {
             String playerDimension
     ) {
         super(Component.literal("Atlas"));
-        this.tiles = tiles;
-        this.atlasMapIds = List.copyOf(atlasMapIds);
+        this.tiles = new ArrayList<>(tiles);
+        this.atlasMapIds = new ArrayList<>(atlasMapIds);
         this.atlasWaypoints = new ArrayList<>(waypoints);
         this.playerDimension = playerDimension;
         this.atlasWidth = tiles.stream().mapToInt(AtlasTilePayload::tileX).max().orElse(0) + 1;
@@ -598,6 +600,7 @@ public class AtlasScreen extends Screen {
     private void closeContextMenu() {
         contextMenuWaypointIndex = -1;
         contextMenuWorldPoint = null;
+        contextMenuMapId = -1;
         rebuildOverlayWidgets();
     }
 
@@ -640,6 +643,7 @@ public class AtlasScreen extends Screen {
     private void openWaypointContextMenu(int waypointIndex, double mouseX, double mouseY) {
         contextMenuWaypointIndex = waypointIndex;
         contextMenuWorldPoint = null;
+        contextMenuMapId = -1;
         positionContextMenu(mouseX, mouseY, WAYPOINT_CONTEXT_MENU_WAYPOINT_ROWS);
         rebuildOverlayWidgets();
     }
@@ -649,11 +653,31 @@ public class AtlasScreen extends Screen {
                 && y >= viewport.contentY() && y <= viewport.contentY() + viewport.contentHeight();
     }
 
-    private void openNewWaypointContextMenu(WorldPoint worldPoint, double mouseX, double mouseY) {
+    private void openNewWaypointContextMenu(WorldPoint worldPoint, int mapId, double mouseX, double mouseY) {
         contextMenuWaypointIndex = -1;
         contextMenuWorldPoint = worldPoint;
+        contextMenuMapId = mapId;
         positionContextMenu(mouseX, mouseY, WAYPOINT_CONTEXT_MENU_MAP_ROWS);
         rebuildOverlayWidgets();
+    }
+
+    private int findMapIdAtScreenPoint(
+            double mouseX,
+            double mouseY,
+            float mapOriginX,
+            float mapOriginY,
+            float scaledTileSize,
+            List<AtlasTilePayload> visibleTiles
+    ) {
+        for (AtlasTilePayload tile : visibleTiles) {
+            float tileScreenX = mapOriginX + tile.tileX() * scaledTileSize;
+            float tileScreenY = mapOriginY + tile.tileY() * scaledTileSize;
+            if (mouseX >= tileScreenX && mouseX < tileScreenX + scaledTileSize
+                    && mouseY >= tileScreenY && mouseY < tileScreenY + scaledTileSize) {
+                return tile.mapId();
+            }
+        }
+        return -1;
     }
 
     // ----- Map click routing / waypoint hit-testing -----
@@ -694,8 +718,20 @@ public class AtlasScreen extends Screen {
                 context.scaledTileSize(),
                 visibleTiles
         );
-        if (worldPoint != null && !waypointIconOptions.isEmpty()) {
-            openNewWaypointContextMenu(worldPoint, event.x(), event.y());
+        if (worldPoint != null) {
+            int mapId = findMapIdAtScreenPoint(
+                    event.x(),
+                    event.y(),
+                    context.mapOriginX(),
+                    context.mapOriginY(),
+                    context.scaledTileSize(),
+                    visibleTiles
+            );
+            if (mapId < 0) {
+                return false;
+            }
+
+            openNewWaypointContextMenu(worldPoint, mapId, event.x(), event.y());
             playSelectionSound();
             leftDragging = false;
             return true;
@@ -1078,8 +1114,9 @@ public class AtlasScreen extends Screen {
 
     private void addWorldContextMenuButton(int optionIndex, Component label, int textColor, WorldPoint worldPoint) {
         addContextMenuButton(optionIndex, label, textColor, () -> {
+            int mapIdAtClick = contextMenuMapId;
             closeContextMenu();
-            handleWorldPointContextMenuOption(optionIndex, worldPoint);
+            handleWorldPointContextMenuOption(optionIndex, worldPoint, mapIdAtClick);
         });
     }
 
@@ -1100,6 +1137,7 @@ public class AtlasScreen extends Screen {
             addWorldContextMenuButton(0, Component.literal("Teleport"), 0xFFFF5EFF, worldPoint);
             addWorldContextMenuButton(1, Component.literal("New waypoint"), 0xFFFFFFFF, worldPoint);
             addWorldContextMenuButton(2, Component.literal("Copy coordinates"), 0xFFFFFFFF, worldPoint);
+            addWorldContextMenuButton(3, Component.literal("Remove map from atlas"), 0xFFFF8080, worldPoint);
         }
     }
 
@@ -1114,6 +1152,54 @@ public class AtlasScreen extends Screen {
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.player != null) {
             minecraft.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.BOOK_PAGE_TURN, 1.0f));
+        }
+    }
+
+    private void playMapRemovalSound() {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.player != null) {
+            minecraft.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.SHEEP_SHEAR, 1.0f));
+        }
+    }
+
+    private void removeMapLocally(int removedMapId) {
+        AtlasTilePayload removedTile = null;
+        for (AtlasTilePayload tile : tiles) {
+            if (tile.mapId() == removedMapId) {
+                removedTile = tile;
+                break;
+            }
+        }
+
+        if (removedTile != null) {
+            Integer scaleFactor = getAtlasScaleFactor();
+            if (scaleFactor != null) {
+                pruneWaypointsOnRemovedTile(removedTile, scaleFactor);
+            }
+        }
+
+        tiles.removeIf(tile -> tile.mapId() == removedMapId);
+        atlasMapIds.remove(Integer.valueOf(removedMapId));
+        renderStates.remove(removedMapId);
+    }
+
+    private void pruneWaypointsOnRemovedTile(AtlasTilePayload removedTile, int scaleFactor) {
+        double minX = removedTile.centerX() - 64.0 * scaleFactor;
+        double minZ = removedTile.centerZ() - 64.0 * scaleFactor;
+        double maxX = minX + 128.0 * scaleFactor;
+        double maxZ = minZ + 128.0 * scaleFactor;
+
+        for (int i = atlasWaypoints.size() - 1; i >= 0; i--) {
+            AtlasContents.WaypointData waypoint = atlasWaypoints.get(i);
+            if (!waypoint.dimension().equals(removedTile.dimension())) {
+                continue;
+            }
+
+            if (waypoint.worldX() >= minX && waypoint.worldX() < maxX
+                    && waypoint.worldZ() >= minZ && waypoint.worldZ() < maxZ) {
+                atlasWaypoints.remove(i);
+                atlasIcons.remove(i + 1);
+            }
         }
     }
 
@@ -1777,7 +1863,7 @@ public class AtlasScreen extends Screen {
         }
     }
 
-    private void handleWorldPointContextMenuOption(int option, WorldPoint worldPoint) {
+    private void handleWorldPointContextMenuOption(int option, WorldPoint worldPoint, int mapIdAtClick) {
         switch (option) {
             case 0 -> {
                 // Teleport to the selected dimension's coordinates
@@ -1786,6 +1872,14 @@ public class AtlasScreen extends Screen {
             }
             case 1 -> beginNewWaypoint(worldPoint);
             case 2 -> copyCoordinatesToClipboard(worldPoint.x(), worldPoint.z());
+            case 3 -> {
+                if (mapIdAtClick >= 0) {
+                    List<Integer> atlasMapIdsSnapshot = List.copyOf(atlasMapIds);
+                    ClientPlayNetworking.send(new RemoveAtlasMapPayload(atlasMapIdsSnapshot, mapIdAtClick));
+                    removeMapLocally(mapIdAtClick);
+                    playMapRemovalSound();
+                }
+            }
             default -> {
                 // No-op: click was inside the menu frame but not on a valid option row.
             }
