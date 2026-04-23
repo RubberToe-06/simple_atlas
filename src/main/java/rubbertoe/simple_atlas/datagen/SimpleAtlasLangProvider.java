@@ -25,6 +25,8 @@ public class SimpleAtlasLangProvider extends FabricLanguageProvider {
         translationBuilder.add("advancements.simple-atlas.adventure.backup_copy.description", "Duplicate an Atlas with a book at a cartography table");
         translationBuilder.add("advancements.simple-atlas.adventure.better_together.title", "Better Together");
         translationBuilder.add("advancements.simple-atlas.adventure.better_together.description", "Merge two Atlases at a cartography table");
+        translationBuilder.add("advancements.simple-atlas.adventure.bigger_picture.title", "Bigger Picture");
+        translationBuilder.add("advancements.simple-atlas.adventure.bigger_picture.description", "Upscale an Atlas with paper at a cartography table");
         translationBuilder.add("advancements.simple-atlas.adventure.marco.title", "Marco!");
         translationBuilder.add("advancements.simple-atlas.adventure.marco.description", "Pin a waypoint to the locator bar");
         translationBuilder.add("key.category.simple-atlas.atlas", "Simple Atlas");

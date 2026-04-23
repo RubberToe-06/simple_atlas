@@ -91,6 +91,21 @@ public class SimpleAtlasAdvancementProvider extends FabricAdvancementProvider {
         Advancement.Builder.advancement()
                 .parent(craftAtlas)
                 .display(
+                        Items.SPYGLASS,
+                        Component.translatable("advancements.simple-atlas.adventure.bigger_picture.title"),
+                        Component.translatable("advancements.simple-atlas.adventure.bigger_picture.description"),
+                        null,
+                        AdvancementType.TASK,
+                        true,
+                        true,
+                        false
+                )
+                .addCriterion("scaled_atlas", AtlasCartographyActionTrigger.TriggerInstance.scaledAtlas())
+                .save(consumer, Identifier.fromNamespaceAndPath(SimpleAtlas.MOD_ID, "adventure/bigger_picture").toString());
+
+        Advancement.Builder.advancement()
+                .parent(craftAtlas)
+                .display(
                         Items.COMPASS,
                         Component.translatable("advancements.simple-atlas.adventure.marco.title"),
                         Component.translatable("advancements.simple-atlas.adventure.marco.description"),
@@ -104,5 +119,3 @@ public class SimpleAtlasAdvancementProvider extends FabricAdvancementProvider {
                 .save(consumer, Identifier.fromNamespaceAndPath(SimpleAtlas.MOD_ID, "adventure/marco").toString());
     }
 }
-
-
