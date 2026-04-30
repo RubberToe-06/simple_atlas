@@ -116,9 +116,8 @@ public class AtlasScreen extends Screen {
     private static final float ZOOM_STEP = 1.1f;
 
     // Immutable atlas payload/state
-    private final int atlasWidth;
-    private final int atlasHeight;
     private final List<AtlasTilePayload> tiles;
+    private final Map<String, DimensionTileBounds> dimensionTileBounds;
     private final List<Integer> atlasMapIds;
     private final PlayerAtlasIcon playerIcon;
     private final List<AtlasIcon> atlasIcons;
@@ -290,6 +289,10 @@ public class AtlasScreen extends Screen {
             int cancelButtonY2
     ) {}
 
+    private record DimensionTileBounds(int minTileX, int minTileY, int width, int height) {
+        private static final DimensionTileBounds EMPTY = new DimensionTileBounds(0, 0, 1, 1);
+    }
+
     // ----- Construction -----
 
     public static AtlasScreen fromPayload(OpenAtlasScreenPayload payload) {
@@ -313,11 +316,10 @@ public class AtlasScreen extends Screen {
     ) {
         super(Component.translatable("screen.simple_atlas.atlas.title"));
         this.tiles = new ArrayList<>(tiles);
+        this.dimensionTileBounds = buildDimensionTileBounds(this.tiles);
         this.atlasMapIds = new ArrayList<>(atlasMapIds);
         this.atlasWaypoints = new ArrayList<>(waypoints);
         this.playerDimension = playerDimension;
-        this.atlasWidth = tiles.stream().mapToInt(AtlasTilePayload::tileX).max().orElse(0) + 1;
-        this.atlasHeight = tiles.stream().mapToInt(AtlasTilePayload::tileY).max().orElse(0) + 1;
 
         // Build ordered dimension tab list: known dimensions in order, then unknowns alphabetically.
         LinkedHashSet<String> dimsSeen = getStrings(tiles);
@@ -364,6 +366,41 @@ public class AtlasScreen extends Screen {
         }
         dimsSeen.addAll(extras);
         return dimsSeen;
+    }
+
+    private static Map<String, DimensionTileBounds> buildDimensionTileBounds(List<AtlasTilePayload> tiles) {
+        Map<String, int[]> minMaxByDimension = new HashMap<>();
+        for (AtlasTilePayload tile : tiles) {
+            int[] minMax = minMaxByDimension.computeIfAbsent(
+                    tile.dimension(),
+                    _ -> new int[] {tile.tileX(), tile.tileX(), tile.tileY(), tile.tileY()}
+            );
+            minMax[0] = Math.min(minMax[0], tile.tileX());
+            minMax[1] = Math.max(minMax[1], tile.tileX());
+            minMax[2] = Math.min(minMax[2], tile.tileY());
+            minMax[3] = Math.max(minMax[3], tile.tileY());
+        }
+
+        Map<String, DimensionTileBounds> bounds = new HashMap<>();
+        for (Map.Entry<String, int[]> entry : minMaxByDimension.entrySet()) {
+            int[] minMax = entry.getValue();
+            int width = Math.max(1, minMax[1] - minMax[0] + 1);
+            int height = Math.max(1, minMax[3] - minMax[2] + 1);
+            bounds.put(entry.getKey(), new DimensionTileBounds(minMax[0], minMax[2], width, height));
+        }
+        return bounds;
+    }
+
+    private DimensionTileBounds getDimensionTileBounds(String dimension) {
+        return dimensionTileBounds.getOrDefault(dimension, DimensionTileBounds.EMPTY);
+    }
+
+    private int localTileX(String dimension, AtlasTilePayload tile) {
+        return tile.tileX() - getDimensionTileBounds(dimension).minTileX();
+    }
+
+    private int localTileY(String dimension, AtlasTilePayload tile) {
+        return tile.tileY() - getDimensionTileBounds(dimension).minTileY();
     }
 
     private int findDimensionTabIndex(String dimension) {
@@ -424,21 +461,22 @@ public class AtlasScreen extends Screen {
         return new AtlasViewport(x, y, width, height, contentX, contentY, contentWidth, contentHeight);
     }
 
-    private float getMapOriginX(AtlasViewport viewport, float scaledTileSize) {
-        float atlasPixelWidth = atlasWidth * scaledTileSize;
+    private float getMapOriginX(AtlasViewport viewport, float scaledTileSize, String dimension) {
+        float atlasPixelWidth = getDimensionTileBounds(dimension).width() * scaledTileSize;
         return viewport.contentX() + (viewport.contentWidth() - atlasPixelWidth) / 2.0f;
     }
 
-    private float getMapOriginY(AtlasViewport viewport, float scaledTileSize) {
-        float atlasPixelHeight = atlasHeight * scaledTileSize;
+    private float getMapOriginY(AtlasViewport viewport, float scaledTileSize, String dimension) {
+        float atlasPixelHeight = getDimensionTileBounds(dimension).height() * scaledTileSize;
         return viewport.contentY() + (viewport.contentHeight() - atlasPixelHeight) / 2.0f;
     }
 
     private MapInteractionContext buildMapInteractionContext() {
         AtlasViewport viewport = getAtlasViewport();
         float scaledTileSize = TILE_SIZE * zoom;
-        float originX = getMapOriginX(viewport, scaledTileSize);
-        float originY = getMapOriginY(viewport, scaledTileSize);
+        String selectedDimension = getSelectedDimension();
+        float originX = getMapOriginX(viewport, scaledTileSize, selectedDimension);
+        float originY = getMapOriginY(viewport, scaledTileSize, selectedDimension);
         float mapOriginX = (float) (originX + panX);
         float mapOriginY = (float) (originY + panY);
         return new MapInteractionContext(viewport, scaledTileSize, mapOriginX, mapOriginY);
@@ -452,7 +490,7 @@ public class AtlasScreen extends Screen {
     }
 
     private void centerOnPlayerPosition() {
-        centerOnIcon(this.playerIcon);
+        centerOnIcon(this.playerIcon, getVisibleTilesForDimension(playerDimension), playerDimension);
     }
 
     private void centerOnSelectedDimensionAtCurrentZoom() {
@@ -462,18 +500,14 @@ public class AtlasScreen extends Screen {
             return;
         }
 
-        if (selectedDimension.equals(playerDimension) && centerOnIcon(this.playerIcon, visibleTiles)) {
+        if (selectedDimension.equals(playerDimension) && centerOnIcon(this.playerIcon, visibleTiles, selectedDimension)) {
             return;
         }
 
-        centerOnTile(visibleTiles.getFirst());
+        centerOnTile(visibleTiles.getFirst(), selectedDimension);
     }
 
-    private void centerOnIcon(AtlasIcon icon) {
-        centerOnIcon(icon, tiles);
-    }
-
-    private boolean centerOnIcon(AtlasIcon icon, List<AtlasTilePayload> visibleTiles) {
+    private boolean centerOnIcon(AtlasIcon icon, List<AtlasTilePayload> visibleTiles, String dimension) {
         float scaledTileSize = TILE_SIZE * zoom;
         AtlasViewport viewport = getAtlasViewport();
         Minecraft minecraft = Minecraft.getInstance();
@@ -482,8 +516,8 @@ public class AtlasScreen extends Screen {
         this.panX = 0;
         this.panY = 0;
 
-        float originX = getMapOriginX(viewport, scaledTileSize);
-        float originY = getMapOriginY(viewport, scaledTileSize);
+        float originX = getMapOriginX(viewport, scaledTileSize, dimension);
+        float originY = getMapOriginY(viewport, scaledTileSize, dimension);
 
         AtlasIcon.Anchor anchor = icon.resolveAnchor(minecraft, visibleTiles, originX, originY, scaledTileSize);
         if (anchor == null) {
@@ -495,17 +529,17 @@ public class AtlasScreen extends Screen {
         return true;
     }
 
-    private void centerOnTile(AtlasTilePayload tile) {
+    private void centerOnTile(AtlasTilePayload tile, String dimension) {
         float scaledTileSize = TILE_SIZE * zoom;
         AtlasViewport viewport = getAtlasViewport();
 
         this.panX = 0;
         this.panY = 0;
 
-        float originX = getMapOriginX(viewport, scaledTileSize);
-        float originY = getMapOriginY(viewport, scaledTileSize);
-        float tileCenterX = originX + (tile.tileX() + 0.5f) * scaledTileSize;
-        float tileCenterY = originY + (tile.tileY() + 0.5f) * scaledTileSize;
+        float originX = getMapOriginX(viewport, scaledTileSize, dimension);
+        float originY = getMapOriginY(viewport, scaledTileSize, dimension);
+        float tileCenterX = originX + (localTileX(dimension, tile) + 0.5f) * scaledTileSize;
+        float tileCenterY = originY + (localTileY(dimension, tile) + 0.5f) * scaledTileSize;
 
         this.panX = viewport.contentX() + viewport.contentWidth() / 2.0 - tileCenterX;
         this.panY = viewport.contentY() + viewport.contentHeight() / 2.0 - tileCenterY;
@@ -542,7 +576,8 @@ public class AtlasScreen extends Screen {
             float mapOriginX,
             float mapOriginY,
             float scaledTileSize,
-            List<AtlasTilePayload> visibleTiles
+            List<AtlasTilePayload> visibleTiles,
+            String dimension
     ) {
         Integer scaleFactor = getAtlasScaleFactor();
         if (scaleFactor == null) {
@@ -550,8 +585,8 @@ public class AtlasScreen extends Screen {
         }
 
         for (AtlasTilePayload tile : visibleTiles) {
-            float tileScreenX = mapOriginX + tile.tileX() * scaledTileSize;
-            float tileScreenY = mapOriginY + tile.tileY() * scaledTileSize;
+            float tileScreenX = mapOriginX + localTileX(dimension, tile) * scaledTileSize;
+            float tileScreenY = mapOriginY + localTileY(dimension, tile) * scaledTileSize;
 
             if (mouseX < tileScreenX || mouseX >= tileScreenX + scaledTileSize || mouseY < tileScreenY || mouseY >= tileScreenY + scaledTileSize) {
                 continue;
@@ -681,11 +716,12 @@ public class AtlasScreen extends Screen {
             float mapOriginX,
             float mapOriginY,
             float scaledTileSize,
-            List<AtlasTilePayload> visibleTiles
+            List<AtlasTilePayload> visibleTiles,
+            String dimension
     ) {
         for (AtlasTilePayload tile : visibleTiles) {
-            float tileScreenX = mapOriginX + tile.tileX() * scaledTileSize;
-            float tileScreenY = mapOriginY + tile.tileY() * scaledTileSize;
+            float tileScreenX = mapOriginX + localTileX(dimension, tile) * scaledTileSize;
+            float tileScreenY = mapOriginY + localTileY(dimension, tile) * scaledTileSize;
             if (mouseX >= tileScreenX && mouseX < tileScreenX + scaledTileSize
                     && mouseY >= tileScreenY && mouseY < tileScreenY + scaledTileSize) {
                 return tile.mapId();
@@ -730,7 +766,8 @@ public class AtlasScreen extends Screen {
                 context.mapOriginX(),
                 context.mapOriginY(),
                 context.scaledTileSize(),
-                visibleTiles
+                visibleTiles,
+                selectedDimension
         );
         if (worldPoint != null) {
             int mapId = findMapIdAtScreenPoint(
@@ -739,7 +776,8 @@ public class AtlasScreen extends Screen {
                     context.mapOriginX(),
                     context.mapOriginY(),
                     context.scaledTileSize(),
-                    visibleTiles
+                    visibleTiles,
+                    selectedDimension
             );
             if (mapId < 0) {
                 return false;
@@ -1797,8 +1835,8 @@ public class AtlasScreen extends Screen {
                 .toList();
 
         for (AtlasTilePayload tile : visibleTiles) {
-            float x = mapOriginX + tile.tileX() * scaledTileSize;
-            float y = mapOriginY + tile.tileY() * scaledTileSize;
+            float x = mapOriginX + localTileX(selectedDimension, tile) * scaledTileSize;
+            float y = mapOriginY + localTileY(selectedDimension, tile) * scaledTileSize;
 
             renderMapTile(graphics, tile.mapId(), x, y, scaledTileSize / 128.0f);
 
@@ -2064,8 +2102,9 @@ public class AtlasScreen extends Screen {
         }
 
         float oldScaledTileSize = TILE_SIZE * oldZoom;
-        float oldOriginX = getMapOriginX(viewport, oldScaledTileSize);
-        float oldOriginY = getMapOriginY(viewport, oldScaledTileSize);
+        String selectedDimension = getSelectedDimension();
+        float oldOriginX = getMapOriginX(viewport, oldScaledTileSize, selectedDimension);
+        float oldOriginY = getMapOriginY(viewport, oldScaledTileSize, selectedDimension);
 
         // atlas-space position under cursor before zoom
         double atlasX = (mouseX - oldOriginX - panX) / oldZoom;
@@ -2074,8 +2113,8 @@ public class AtlasScreen extends Screen {
         this.zoom = newZoom;
 
         float newScaledTileSize = TILE_SIZE * newZoom;
-        float newOriginX = getMapOriginX(viewport, newScaledTileSize);
-        float newOriginY = getMapOriginY(viewport, newScaledTileSize);
+        float newOriginX = getMapOriginX(viewport, newScaledTileSize, selectedDimension);
+        float newOriginY = getMapOriginY(viewport, newScaledTileSize, selectedDimension);
 
         // keep same atlas-space point under cursor
         this.panX = (float) (mouseX - newOriginX - atlasX * newZoom);
