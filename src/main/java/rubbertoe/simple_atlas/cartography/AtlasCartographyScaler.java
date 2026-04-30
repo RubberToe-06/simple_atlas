@@ -173,8 +173,8 @@ public final class AtlasCartographyScaler {
                     && existing.centerX == atlasCell.centerX
                     && existing.centerZ == atlasCell.centerZ
                     && existing.scale == originData.scale) {
-                ProjectionMask projection = projectKnownPixelsIntoScaledMap(finerData, existing);
-                applyExplorationEdgeShading(existing, projection.newlyFilled(), projection.projectedCoverage());
+                projectKnownPixelsIntoScaledMap(finerData, existing);
+                // Do NOT apply jagged edge effect when merging a finer-scale map into an atlas tile
                 return contents; // map_ids unchanged; underlying tile data enriched
             }
         }
@@ -184,8 +184,8 @@ public final class AtlasCartographyScaler {
             return null;
         }
 
-        ProjectionMask projection = projectKnownPixelsIntoScaledMap(finerData, atlasCell);
-        applyExplorationEdgeShading(atlasCell, projection.newlyFilled(), projection.projectedCoverage());
+        projectKnownPixelsIntoScaledMap(finerData, atlasCell);
+        // Do NOT apply jagged edge effect when merging a finer-scale map into an atlas tile
         MapId newId = level.getFreeMapId();
         level.setMapData(newId, atlasCell);
         return contents.withAdded(newId.id());
