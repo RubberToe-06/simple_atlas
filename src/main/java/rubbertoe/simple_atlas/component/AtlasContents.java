@@ -2,6 +2,7 @@ package rubbertoe.simple_atlas.component;
 
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
+import net.minecraft.resources.Identifier;
 
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -11,6 +12,7 @@ import java.util.SequencedSet;
 public final class AtlasContents {
     public static final int MAX_ATLAS_MAP_COUNT = 256;
     public static final AtlasContents EMPTY = new AtlasContents(List.of(), List.of(), 0, 1, 0);
+    public static final String DEFAULT_DIMENSION = "minecraft:overworld";
 
     private static final int MAX_WAYPOINT_NAME_LENGTH = 32;
 
@@ -28,6 +30,7 @@ public final class AtlasContents {
         public WaypointData {
             name = sanitizeName(name);
             iconIndex = Math.max(0, iconIndex);
+            dimension = sanitizeDimension(dimension);
         }
     }
 
@@ -125,6 +128,19 @@ public final class AtlasContents {
         String trimmed = name.trim();
         if (trimmed.length() > MAX_WAYPOINT_NAME_LENGTH) {
             return trimmed.substring(0, MAX_WAYPOINT_NAME_LENGTH);
+        }
+
+        return trimmed;
+    }
+
+    public static String sanitizeDimension(String dimension) {
+        if (dimension == null) {
+            return DEFAULT_DIMENSION;
+        }
+
+        String trimmed = dimension.trim();
+        if (trimmed.isEmpty() || Identifier.tryParse(trimmed) == null) {
+            return DEFAULT_DIMENSION;
         }
 
         return trimmed;

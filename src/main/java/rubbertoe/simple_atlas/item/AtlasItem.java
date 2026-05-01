@@ -72,14 +72,14 @@ public class AtlasItem extends Item {
         }
 
         BlockPos bannerPos = context.getClickedPos();
-        if (hasWaypointAtBlock(contents, bannerPos)) {
+        String dimensionKey = ((ServerLevel) level).getLevel().dimension().identifier().toString();
+        if (hasWaypointAtBlock(contents, bannerPos, dimensionKey)) {
             return InteractionResult.SUCCESS_SERVER;
         }
 
         int bannerIconIndex = WaypointIconCatalog.bannerIconIndexForColor(banner.getBaseColor());
         String customName = banner.getCustomName() != null ? banner.getCustomName().getString() : "";
         String waypointName = customName.isBlank() ? "Banner " + contents.nextWaypointNumber() : customName;
-        String dimensionKey = ((ServerLevel) level).getLevel().dimension().identifier().toString();
 
         AtlasContents.WaypointData waypoint = new AtlasContents.WaypointData(
                 bannerPos.getX() + 0.5,
@@ -254,9 +254,11 @@ public class AtlasItem extends Item {
         }
     }
 
-    private static boolean hasWaypointAtBlock(AtlasContents contents, BlockPos pos) {
+    private static boolean hasWaypointAtBlock(AtlasContents contents, BlockPos pos, String dimension) {
         for (AtlasContents.WaypointData waypoint : contents.waypoints()) {
-            if (Mth.floor(waypoint.worldX()) == pos.getX() && Mth.floor(waypoint.worldZ()) == pos.getZ()) {
+            if (waypoint.dimension().equals(dimension)
+                    && Mth.floor(waypoint.worldX()) == pos.getX()
+                    && Mth.floor(waypoint.worldZ()) == pos.getZ()) {
                 return true;
             }
         }

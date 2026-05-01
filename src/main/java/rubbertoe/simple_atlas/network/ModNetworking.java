@@ -276,12 +276,17 @@ public final class ModNetworking {
             if (sanitized.size() >= MAX_WAYPOINT_COUNT) {
                 break;
             }
+
+             if (!Double.isFinite(waypoint.worldX()) || !Double.isFinite(waypoint.worldZ())) {
+                continue;
+            }
+
             sanitized.add(new AtlasContents.WaypointData(
                     waypoint.worldX(),
                     waypoint.worldZ(),
                     waypoint.name(),
                     waypoint.iconIndex(),
-                    waypoint.dimension()
+                    AtlasContents.sanitizeDimension(waypoint.dimension())
             ));
         }
         return sanitized;

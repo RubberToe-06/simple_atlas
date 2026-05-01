@@ -60,6 +60,10 @@ public final class AtlasWaypointDecorations {
     }
 
     private static MapDecoration toDecoration(MapItemSavedData mapData, AtlasContents.WaypointData waypoint) {
+        if (!mapData.dimension.identifier().toString().equals(waypoint.dimension())) {
+            return null;
+        }
+
         int scaleFactor = 1 << mapData.scale;
         float xDeltaFromCenter = (float) ((waypoint.worldX() - mapData.centerX) / scaleFactor);
         float zDeltaFromCenter = (float) ((waypoint.worldZ() - mapData.centerZ) / scaleFactor);

@@ -146,6 +146,7 @@ public class AtlasScreen extends Screen {
     private int contextMenuY;
     private @Nullable WorldPoint contextMenuWorldPoint;
     private int contextMenuMapId = -1;
+    private boolean skipWaypointSaveOnClose;
 
     // Overlay widgets
     private @Nullable EditBox waypointNameEditBox = null;
@@ -1221,45 +1222,16 @@ public class AtlasScreen extends Screen {
         }
     }
 
-    private void removeMapLocally(int removedMapId) {
-        AtlasTilePayload removedTile = null;
-        for (AtlasTilePayload tile : tiles) {
-            if (tile.mapId() == removedMapId) {
-                removedTile = tile;
-                break;
-            }
+    private void requestAtlasMapRemoval(int removedMapId) {
+        if (removedMapId < 0) {
+            return;
         }
 
-        if (removedTile != null) {
-            Integer scaleFactor = getAtlasScaleFactor();
-            if (scaleFactor != null) {
-                pruneWaypointsOnRemovedTile(removedTile, scaleFactor);
-            }
-        }
-
-        tiles.removeIf(tile -> tile.mapId() == removedMapId);
-        atlasMapIds.remove(Integer.valueOf(removedMapId));
-        renderStates.remove(removedMapId);
-    }
-
-    private void pruneWaypointsOnRemovedTile(AtlasTilePayload removedTile, int scaleFactor) {
-        double minX = removedTile.centerX() - 64.0 * scaleFactor;
-        double minZ = removedTile.centerZ() - 64.0 * scaleFactor;
-        double maxX = minX + 128.0 * scaleFactor;
-        double maxZ = minZ + 128.0 * scaleFactor;
-
-        for (int i = atlasWaypoints.size() - 1; i >= 0; i--) {
-            AtlasContents.WaypointData waypoint = atlasWaypoints.get(i);
-            if (!waypoint.dimension().equals(removedTile.dimension())) {
-                continue;
-            }
-
-            if (waypoint.worldX() >= minX && waypoint.worldX() < maxX
-                    && waypoint.worldZ() >= minZ && waypoint.worldZ() < maxZ) {
-                atlasWaypoints.remove(i);
-                atlasIcons.remove(i + 1);
-            }
-        }
+        List<Integer> atlasMapIdsSnapshot = List.copyOf(atlasMapIds);
+        ClientPlayNetworking.send(new RemoveAtlasMapPayload(atlasMapIdsSnapshot, removedMapId));
+        skipWaypointSaveOnClose = true;
+        playMapRemovalSound();
+        onClose();
     }
 
     private boolean commitWaypointDraft() {
@@ -1974,18 +1946,12 @@ public class AtlasScreen extends Screen {
                 if (canTeleport) {
                     copyCoordinatesToClipboard(worldPoint.x(), worldPoint.z());
                 } else if (mapIdAtClick >= 0) {
-                    List<Integer> atlasMapIdsSnapshot = List.copyOf(atlasMapIds);
-                    ClientPlayNetworking.send(new RemoveAtlasMapPayload(atlasMapIdsSnapshot, mapIdAtClick));
-                    removeMapLocally(mapIdAtClick);
-                    playMapRemovalSound();
+                    requestAtlasMapRemoval(mapIdAtClick);
                 }
             }
             case 3 -> {
                 if (canTeleport && mapIdAtClick >= 0) {
-                    List<Integer> atlasMapIdsSnapshot = List.copyOf(atlasMapIds);
-                    ClientPlayNetworking.send(new RemoveAtlasMapPayload(atlasMapIdsSnapshot, mapIdAtClick));
-                    removeMapLocally(mapIdAtClick);
-                    playMapRemovalSound();
+                    requestAtlasMapRemoval(mapIdAtClick);
                 }
             }
             default -> {
@@ -2159,7 +2125,9 @@ public class AtlasScreen extends Screen {
 
     @Override
     public void onClose() {
-        persistWaypointState();
+        if (!skipWaypointSaveOnClose) {
+            persistWaypointState();
+        }
         ClientPlayNetworking.send(new CloseAtlasViewPayload());
         super.onClose();
     }
