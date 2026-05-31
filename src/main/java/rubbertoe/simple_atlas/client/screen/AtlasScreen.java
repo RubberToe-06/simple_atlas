@@ -92,7 +92,7 @@ public class AtlasScreen extends Screen {
     private static final int BOOKMARK_TAB_WIDTH = 30;
     private static final int BOOKMARK_TAB_HEIGHT = 30;
     private static final int BOOKMARK_ICON_TEXTURE_SIZE = 16;
-    private static final int BOOKMARK_ICON_RENDER_SIZE = 10;
+    private static final int BOOKMARK_ICON_RENDER_SIZE = 14;
     private static final int BOOKMARK_TABS_TOP_OFFSET = -6;
     private static final int BOOKMARK_TABS_RIGHT_OVERLAP = -2;
     private static final int BOOKMARK_TAB_GAP = -8;

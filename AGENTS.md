@@ -1,81 +1,87 @@
 # AGENTS.md
 
 ## Project Snapshot
-- Fabric mod (`simple-atlas`) for Minecraft `26.1` (year.update format: `26.1` = 2026 update 1), Java `25`, Loom `1.15.x`.
-- Minecraft versions now use a year.update scheme; treat version bumps as update-track changes within that yearly line.
+- Fabric mod (`simple-atlas`) for Minecraft `26.1`, Java `25`, Loom `1.15-SNAPSHOT`.
+- `gradle.properties` currently pins: loader `0.18.6`, Fabric API `0.145.1+26.1`, mod version `1.0.1`.
 - Main package: `src/main/java/rubbertoe/simple_atlas`.
-- Entrypoints are declared in `src/main/resources/fabric.mod.json` (`main`, `client`, `fabric-datagen`).
+- Entrypoints in `src/main/resources/fabric.mod.json`: `main`, `client`, `fabric-datagen`.
 
 ## Architecture You Should Learn First
-- Server bootstrap: `SimpleAtlas.onInitialize()` wires modules in order: `ModItems`, `ModMapDecorationTypes`, `ModComponents`, `ModNetworking`, `ModCriteria`, `AtlasViewTicker`.
-- Item state is stored in a custom data component: `ModComponents.ATLAS_CONTENTS` with codec in `component/AtlasContents.java`.
-- `AtlasContents` stores atlas map IDs and waypoint state (`waypoints`, `selectedWaypointIconIndex`, `nextWaypointNumber`) and sanitizes waypoint names/icon indices; each `WaypointData` also carries a dimension string with legacy codec default `minecraft:overworld`; `blankMapCount` remains codec-only legacy compatibility and is normalized to `0` at runtime.
-- Core gameplay logic lives in `item/AtlasItem.java`:
-  - Main-hand `useOn` on a banner appends a waypoint using banner color/name (`WaypointIconCatalog.bannerIconIndexForColor(...)`), with duplicate-position rejection and `ModNetworking.MAX_WAYPOINT_COUNT` enforcement.
-  - Main-hand use with stored map IDs -> call `AtlasLayoutBuilder.build()`, serialize result as `List<AtlasTilePayload>` tagged with each tile's dimension plus the player's current dimension, register player with `AtlasViewManager`, send `OpenAtlasScreenPayload` to client.
-  - `inventoryTick(...)` continuously picks the current map via `AtlasMapSelector`, writes `DataComponents.MAP_ID`, then delegates to `Items.FILLED_MAP.inventoryTick(...)` so held atlas maps keep vanilla player-marker behavior.
-- Layout computation is in `layout/`: `AtlasLayoutBuilder.build(ServerLevel, AtlasContents)` returns an `AtlasLayout` record; each map becomes an `AtlasMapEntry` with grid coordinates (`tileX`/`tileY`) relative to the origin map. Map span is `128 << scale`.
-- Cartography integration is mixin-driven (`mixin/CartographyTableMenuMixin.java`, `CartographyTableAdditionalSlotMixin.java`, `CartographyTableMapSlotMixin.java`, `CartographyTableResultSlotMixin.java`) rather than vanilla recipe-only behavior.
-- Cartography recipes handled in `CartographyTableMenuMixin`: book + atlas duplicates atlas, filled map + atlas appends same-scale maps after dedupe/scale checks, filled map + atlas can also integrate a finer-scale map via `AtlasCartographyScaler`, atlas + paper scales every atlas map by +1, and atlas + atlas merges map/waypoint contents (only when both atlases have equal map-count size).
-- `CartographyTableMenuMixin` intercepts `quickMoveStack` (shift-click) to route books into slot 0 and atlas items into slot 1 (fallback slot 0 for atlas+atlas merge). `mixin/AbstractContainerMenuInvoker.java` exposes `moveItemStackTo` and `broadcastChanges` as `@Invoker` helpers.
-- `cartography/AtlasCartographyScaler.java` handles atlas-wide scaling and finer-map integration by projecting known pixels into atlas-scale map data, deduping scaled targets by dimension/center/scale, and preserving waypoint metadata.
-- `CartographyTableResultSlotMixin` augments result `onTake` for book duplication, atlas-wide scaling, and finer-map insertion; it performs the actual server-side atlas mutation after input consumption and triggers `ModCriteria.ATLAS_CARTOGRAPHY_ACTION` for duplicate/scale/merge recipes.
-- Live map sync is server-managed: `server/AtlasViewManager` tracks active viewers; `AtlasViewTicker` pushes map packets every 10 ticks for active viewers; `mixin/ServerPlayerMixin.java` augments normal held-item map sync (`synchronizeSpecialItemUpdates`) for atlas stacks; both paths apply `AtlasWaypointDecorations` before sending.
-- `AtlasViewTicker` closes active atlas views when atlas leaves main hand and, while viewing, syncs current atlas-map updates for atlas stacks in either hand.
-- Client UI is `client/screen/AtlasScreen.java` (zoom 0.25–4.0 via scroll, left-drag pan, default `R` keybind resets zoom+pan to player position, hover tile overlay, player marker via `textures/gui/player_marker.png`, close packet on exit). Rendering uses `extractRenderState()` (MC 26.1 API), not `render()`.
-- `AtlasScreen` builds bookmark tabs per dimension from `AtlasTilePayload.dimension` (textures under `assets/simple-atlas/textures/gui/tabs/`), defaults to the player's current dimension tab from `OpenAtlasScreenPayload.playerDimension`, and only renders the player marker on the matching tab.
-- `AtlasScreen` also manages waypoint UX (right-click context menu, create/edit/delete, icon picker, name entry, waypoint hover titles, copy coordinates, and pinned-marker rendering) and can pin/unpin waypoints to the vanilla locator bar.
-- `AtlasScreen` context menus also include a local teleport action (`execute in <dimension> run tp <x> ~ <z>`) for both waypoint and map-point entries, plus a right-click "Remove map from atlas" action that removes the clicked tile client-side before sending the server request.
-- Locator-bar pinning is player-local and temporary: `network/ModNetworking.java` tracks pinned waypoint UUIDs per player, sends `ClientboundTrackedWaypointPacket` updates, and clears pins when the player no longer has any atlas in inventory.
+- Server bootstrap (`SimpleAtlas.onInitialize()`) initializes in order: `ModItems`, `ModMapDecorationTypes`, `ModComponents`, `ModNetworking`, `ModCriteria`, `AtlasViewTicker`.
+- Atlas state is stored in `ModComponents.ATLAS_CONTENTS` using `component/AtlasContents.java`.
+- `AtlasContents` stores map IDs + waypoint state (`waypoints`, `selectedWaypointIconIndex`, `nextWaypointNumber`), caps map count at `256`, sanitizes waypoint names/icon indices/dimensions, and keeps `blankMapCount` as legacy codec compatibility (runtime-normalized to `0`).
+- Core gameplay logic is in `item/AtlasItem.java`:
+  - `useOn` on banners (main hand only) creates banner-derived waypoints with duplicate-position prevention and `ModNetworking.MAX_WAYPOINT_COUNT` enforcement.
+  - `use` builds layout via `AtlasLayoutBuilder.build(...)`, sends `OpenAtlasScreenPayload`, and registers active viewers in `AtlasViewManager`.
+  - `inventoryTick` keeps atlas `DataComponents.MAP_ID` synced with current position (`AtlasMapSelector`) and delegates to `Items.FILLED_MAP.inventoryTick(...)` for vanilla marker behavior.
+- Layout logic (`layout/AtlasLayoutBuilder.java`) computes `AtlasLayout` from same-scale maps using `128 << scale` span and emits per-tile grid positions.
+- Cartography behavior is mixin-driven (`CartographyTableMenuMixin`, `CartographyTableAdditionalSlotMixin`, `CartographyTableMapSlotMixin`, `CartographyTableResultSlotMixin`):
+  - Book + atlas: duplicate atlas.
+  - Filled map + atlas: add same-scale map after dedupe/limits; lower-scale maps may be integrated through `AtlasCartographyScaler`.
+  - Atlas + paper: scale atlas maps by +1.
+  - Atlas + atlas: merge map/waypoint contents only when both atlases have equal map counts.
+- `CartographyTableMenuMixin` also intercepts `quickMoveStack` so shift-click routes books to slot `0` and atlas items to slot `1` (fallback slot `0` for atlas+atlas merge). `AbstractContainerMenuInvoker` exposes `moveItemStackTo` and `broadcastChanges`.
+- `cartography/AtlasCartographyScaler.java` handles atlas-wide scaling and lower-scale integration, dedupes by `(dimension, centerX, centerZ, scale)`, and preserves waypoint metadata.
+- `CartographyTableResultSlotMixin` applies server-side post-take effects (book duplication extra copy, scale/integration mutation) and triggers `ModCriteria.ATLAS_CARTOGRAPHY_ACTION`.
+- Live map sync:
+  - `AtlasViewManager` tracks active viewers.
+  - `AtlasViewTicker` pushes updates every 10 ticks for active atlas viewers and closes active view if atlas leaves main hand.
+  - `ServerPlayerMixin` intercepts `synchronizeSpecialItemUpdates` for held atlases.
+  - Packet augmentation uses `AtlasWaypointDecorations`.
+- Client UI is `client/screen/AtlasScreen.java`:
+  - Zoom `0.25–4.0`, left-drag pan, `R` reset keybind.
+  - Uses `extractRenderState(...)` rendering flow (not `render`).
+  - Dimension tabs are built from `AtlasTilePayload.dimension`, default tab follows `OpenAtlasScreenPayload.playerDimension`, player marker only renders on the player’s current dimension tab.
+  - Waypoint UI supports create/edit/delete, icon cycling, copy coords, teleport command action, and locator-bar pin/unpin.
+  - Right-click map context menu supports map removal request (server-authoritative mutation).
+- Client visual smoothing mixin: `mixin/client/ItemInHandRendererNoAtlasReequipMixin.java` prevents atlas hand re-equip animation churn on atlas component updates.
 
-## Networking/Data Flow
-- Payload types and codecs are in `network/*Payload.java`; registration is centralized in `network/ModNetworking.java`.
-- `AtlasTilePayload` is a plain record (mapId, centerX, centerZ, tileX, tileY, dimension); `OpenAtlasScreenPayload` also carries `playerDimension`. The tile stream codec (`TILE_CODEC`) is defined inside `OpenAtlasScreenPayload` and is **not** registered independently.
-- Open flow: `AtlasItem` (server) -> `OpenAtlasScreenPayload` (carries `List<AtlasTilePayload>`) -> `SimpleAtlasClient` receiver -> `AtlasScreen`.
-- Close flow: `AtlasScreen.onClose()` sends `CloseAtlasViewPayload` -> server receiver removes player from `AtlasViewManager`.
-- Waypoint persistence flow: `AtlasScreen.persistWaypointState()` -> `SaveAtlasWaypointsPayload` (includes `atlasMapIds` echo) -> server validates current atlas identity, sanitizes waypoint list, writes updated `AtlasContents`.
-- Map removal flow: `AtlasScreen` context menu -> `RemoveAtlasMapPayload` (includes `atlasMapIds` echo) -> server validates current atlas identity, removes the map plus waypoints covered by that map, gives the filled map back to the player, and sends immediate refresh packets.
-- Held-map sync flow: `AtlasItem.inventoryTick(...)` updates atlas `DataComponents.MAP_ID` -> `ServerPlayerMixin.synchronizeSpecialItemUpdates(...)` intercepts atlas updates -> `AtlasWaypointDecorations.withAtlasWaypointDecorations(...)` merges atlas waypoint decorations into `ClientboundMapItemDataPacket` when decoration payload is present.
-- Navigation flow: `AtlasScreen` context menu -> `NavigateToWaypointPayload` / `UnpinWaypointPayload` -> server sends `ClientboundTrackedWaypointPacket` add/remove updates for locator-bar pins. `StopNavigatingPayload` remains an internal clear-all path.
-- Pin identity is derived from floored waypoint coordinates via `navigation/WaypointIconCatalog.navigationWaypointId(...)`, not stored in `AtlasContents`.
-- If adding a payload, follow existing pattern: define `TYPE` + `CODEC`, register in `ModNetworking`, then wire receiver/sender.
+## Networking / Data Flow
+- Payload classes are in `network/*Payload.java`; registration/receivers are centralized in `network/ModNetworking.java`.
+- `AtlasTilePayload` is a plain record (`mapId`, `centerX`, `centerZ`, `tileX`, `tileY`, `dimension`).
+- `OpenAtlasScreenPayload` carries tiles + atlas map IDs + waypoints + selected icon index + next waypoint number + `playerDimension`; tile codec is embedded in that payload.
+- Open flow: `AtlasItem.use` -> `OpenAtlasScreenPayload` -> `SimpleAtlasClient` receiver -> `AtlasScreen`.
+- Close flow: `AtlasScreen.onClose()` sends `CloseAtlasViewPayload`; server stops viewing and refreshes relevant held-atlas waypoint state.
+- Waypoint save flow: `AtlasScreen.persistWaypointState()` -> `SaveAtlasWaypointsPayload` (includes atlas map ID echo) -> server validates atlas identity, sanitizes waypoint list, stores updated `AtlasContents`, reconciles pinned waypoint IDs, and triggers immediate refresh for relevant maps.
+- Map removal flow: `AtlasScreen` sends `RemoveAtlasMapPayload` (atlas ID echo + map ID) -> server validates current atlas identity, removes map plus covered waypoints, gives player the removed filled map, reconciles pins, and pushes refresh packets.
+- Held-map sync flow: atlas `MAP_ID` selection (`AtlasItem.inventoryTick`) -> `ServerPlayerMixin.synchronizeSpecialItemUpdates` interception -> waypoint decoration augmentation in `AtlasWaypointDecorations`.
+- Navigation flow: `NavigateToWaypointPayload` / `UnpinWaypointPayload` / `StopNavigatingPayload` -> server updates `ClientboundTrackedWaypointPacket` pins and performs periodic cleanup when players no longer have an atlas.
+- Pin IDs are deterministic from floored waypoint coordinates via `WaypointIconCatalog.navigationWaypointId(...)` (not persisted in `AtlasContents`).
 
-## Developer Workflows (verified tasks)
-- Build/test: `./gradlew.bat build` (project currently has no `src/test` sources).
-- Run client for manual testing: `./gradlew.bat runClient`.
-- Run dedicated server: `./gradlew.bat runServer`.
-- Regenerate data assets: `./gradlew.bat runDatagen`.
-- Inspect available tasks: `./gradlew.bat tasks --all`.
+## Developer Workflows
+- Build: `./gradlew.bat build`
+- Run client: `./gradlew.bat runClient`
+- Run dedicated server: `./gradlew.bat runServer`
+- Regenerate data assets: `./gradlew.bat runDatagen`
+- List tasks: `./gradlew.bat tasks --all`
+- Current repo has no `src/test` sources.
 - CI reference: `.github/workflows/build.yml` runs `./gradlew build` on Ubuntu `24.04` with Java `25`.
 
-## Agent Tooling
-- `minecraft-dev-mcp` tools are available in this environment; use them to inspect decompiled Minecraft `26.1` classes, method signatures, packets, and registries before changing version-sensitive code.
-- Prefer checking vanilla call paths and APIs with those tools before editing `mixin/CartographyTableMenuMixin.java`, `client/screen/AtlasScreen.java`, map sync code, or other internals tied closely to Minecraft updates.
-- Useful targets to inspect first include `MapItemSavedData`, `CartographyTableMenu`, map packet classes, and rendering classes used by `AtlasScreen.extractRenderState()`.
-- If a behavior depends on Minecraft internals, verify the exact `26.1` implementation with `minecraft-dev-mcp` rather than assuming older mapping-era Fabric examples still apply.
+## Agent Tooling Notes
+- Use the available `minecraft-dev-*` tools to inspect Minecraft internals (class APIs, packets, registries, mappings) before editing version-sensitive logic.
+- Prioritize validating vanilla internals before changing cartography mixins, map packet augmentation, or `AtlasScreen` rendering internals.
+- Good first inspection targets: `CartographyTableMenu`, `MapItemSavedData`, map packet types, and rendering APIs used by `AtlasScreen.extractRenderState(...)`.
 
 ## Project-Specific Conventions
-- Registry helper pattern: keep registration helpers in module-local classes (example: `item/ModItems.register(...)`).
-- Use `Identifier.fromNamespaceAndPath(SimpleAtlas.MOD_ID, ...)` for IDs; avoid hard-coded namespace strings.
-- Minecraft source for current versions is unobfuscated; use official Minecraft names directly (no Yarn remapping layer needed).
-- Atlas map IDs preserve insertion order and dedupe (`AtlasContents.withAdded` uses `LinkedHashSet`).
-- Treat `blankMapCount` in `AtlasContents` as legacy-read compatibility only; do not build new behavior around it unless a migration explicitly reintroduces runtime usage.
-- Waypoint names are capped at 32 chars and icon indices are clamped/sanitized in `AtlasContents.WaypointData`; keep client and server limits aligned.
-- Waypoint list writes are capped server-side at 256 entries (`ModNetworking.MAX_WAYPOINT_COUNT`); preserve that ceiling when changing waypoint save flows.
-- Keep waypoint icon key sets aligned across `navigation/WaypointIconCatalog.java`, `assets/simple-atlas/textures/gui/icons/*.png`, and `assets/simple-atlas/waypoint_style/*.json`.
-- Treat `src/main/generated` as datagen output; change providers in `datagen/*Provider.java` (including `SimpleAtlasAdvancementProvider`) instead of hand-editing generated JSON.
-- Mixin targets use `simple_atlas$` method prefixes for injected/invoker methods.
-- Keep side-specific logic separated: client receivers/screens under `client/*`; server state/ticking under `server/*`.
+- Keep registration helpers module-local (`ModItems.register(...)` pattern).
+- Use `Identifier.fromNamespaceAndPath(SimpleAtlas.MOD_ID, ...)` for identifiers.
+- Atlas map IDs preserve insertion order + dedupe (`LinkedHashSet`).
+- Keep waypoint limits aligned: name length `32`, server waypoint cap `256`.
+- Keep waypoint icon sets in sync across:
+  - `navigation/WaypointIconCatalog.java`
+  - `assets/simple-atlas/textures/gui/icons/*.png`
+  - `assets/simple-atlas/waypoint_style/*.json`
+- Treat `src/main/generated` as datagen output; edit providers under `datagen/*Provider.java` instead of generated JSON.
+- Keep mixin helper prefixes as `simple_atlas$...`.
+- Keep client/server responsibilities separated (`client/*` vs `server/*`).
 
 ## High-Risk Integration Points
-- `CartographyTableMenu` internals are version-sensitive; re-check mixins after Minecraft/Fabric updates.
-- Map sync depends on `MapItemSavedData#getUpdatePacket`; null checks are required before sending packets.
-- Waypoint decoration augmentation must preserve vanilla packet behavior when `ClientboundMapItemDataPacket.decorations()` is empty; forcing `Optional.of(emptyList())` causes marker flicker/clears.
-- Atlas layout assumes uniform map scale; scale mismatch handling in `AtlasItem` and `CartographyTableMenuMixin` must stay consistent.
-- `AtlasCartographyScaler` relies on `MapItemSavedData.scaled()`, `MapItemSavedData.createFresh(...)`, and `MapItemSavedData#setColor(...)`; re-check projection, dedupe, and edge-shading behavior after Minecraft updates.
-- Cartography mixins target inner slot classes (`CartographyTableMenu$3/$4/$5`); re-validate target names and `onTake` behavior after Minecraft updates.
-- `ServerPlayerMixin` targets `ServerPlayer#synchronizeSpecialItemUpdates`; re-check this injection point and signature on Minecraft updates.
-- Locator-bar pin cleanup depends on `ClientboundTrackedWaypointPacket` updates plus server-side pin reconciliation in `ModNetworking` (save, atlas-loss tick cleanup, disconnect); re-check if tracked waypoint internals change.
-- Map removal must keep `AtlasScreen.removeMapLocally(...)` and `ModNetworking.removeMapFromAtlas(...)` aligned, including dimension-aware waypoint pruning and the immediate bare-map refresh packet.
-- Dimension tab behavior depends on `AtlasTilePayload.dimension` and `OpenAtlasScreenPayload.playerDimension`; mismatches break initial tab selection, player-marker visibility, and teleport target dimension.
-- `AtlasScreen.extractRenderState()` uses `GuiGraphicsExtractor` and `MapRenderState` - both are MC `26.1` (2026 update 1)-specific rendering APIs; re-check if the renderer API changes on update.
+- `CartographyTableMenu` internals and inner-slot mixin targets (`$3/$4/$5`) are version-sensitive.
+- Map sync depends on `MapItemSavedData#getUpdatePacket`; maintain null-safe behavior and manual refresh fallback semantics where already used.
+- `AtlasWaypointDecorations` must preserve vanilla empty-decoration behavior; forcing empty decoration payloads causes flicker/marker clears.
+- Atlas layout and cartography logic assume consistent atlas map scale; keep `AtlasItem`, `AtlasLayoutBuilder`, `CartographyTableMenuMixin`, and `AtlasCartographyScaler` behavior aligned.
+- `AtlasCartographyScaler` depends on `MapItemSavedData.scaled()`, `createFresh(...)`, and `setColor(...)`; re-check projection/dedupe/edge-shading behavior after MC updates.
+- `ServerPlayerMixin` injection target (`ServerPlayer#synchronizeSpecialItemUpdates`) must be re-validated on updates.
+- Locator-bar pin cleanup relies on packet updates plus server-side reconciliation in `ModNetworking` (save/removal/inventory-check/disconnect paths).
+- Dimension tab correctness depends on `AtlasTilePayload.dimension` and `OpenAtlasScreenPayload.playerDimension`; mismatches break tab selection and player-marker visibility.
+- `AtlasScreen.extractRenderState(...)` and related rendering APIs are version-sensitive and should be rechecked after MC/Fabric updates.
