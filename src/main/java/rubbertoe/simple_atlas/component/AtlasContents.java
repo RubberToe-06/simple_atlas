@@ -3,6 +3,8 @@ package rubbertoe.simple_atlas.component;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.resources.Identifier;
+import rubbertoe.simple_atlas.config.SimpleAtlasConfig;
+import rubbertoe.simple_atlas.config.SimpleAtlasConfigManager;
 
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -10,7 +12,7 @@ import java.util.Objects;
 import java.util.SequencedSet;
 
 public final class AtlasContents {
-    public static final int MAX_ATLAS_MAP_COUNT = 256;
+    public static final int HARD_MAX_ATLAS_MAP_COUNT = SimpleAtlasConfig.MAX_ATLAS_MAP_COUNT;
     public static final AtlasContents EMPTY = new AtlasContents(List.of(), List.of(), 0, 1, 0);
     public static final String DEFAULT_DIMENSION = "minecraft:overworld";
 
@@ -99,7 +101,7 @@ public final class AtlasContents {
     }
 
     public AtlasContents withAdded(int mapId) {
-        if (contains(mapId) || mapIdSet.size() >= MAX_ATLAS_MAP_COUNT) {
+        if (contains(mapId) || mapIdSet.size() >= configuredMapLimit()) {
             return this;
         }
 
@@ -113,7 +115,7 @@ public final class AtlasContents {
     }
 
     public boolean canAddMapId() {
-        return mapIdSet.size() < MAX_ATLAS_MAP_COUNT;
+        return mapIdSet.size() < configuredMapLimit();
     }
 
     public int size() {
@@ -147,14 +149,19 @@ public final class AtlasContents {
     }
 
     private static SequencedSet<Integer> cappedMapIdSet(List<Integer> mapIds) {
+        int mapLimit = configuredMapLimit();
         LinkedHashSet<Integer> capped = new LinkedHashSet<>();
         for (int mapId : mapIds) {
-            if (capped.size() >= MAX_ATLAS_MAP_COUNT) {
+            if (capped.size() >= mapLimit) {
                 break;
             }
             capped.add(mapId);
         }
         return capped;
+    }
+
+    private static int configuredMapLimit() {
+        return Math.min(SimpleAtlasConfigManager.getMaxAtlasMapCount(), HARD_MAX_ATLAS_MAP_COUNT);
     }
 
     @Override

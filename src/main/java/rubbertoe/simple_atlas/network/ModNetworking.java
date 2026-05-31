@@ -18,6 +18,7 @@ import net.minecraft.world.waypoints.Waypoint;
 import rubbertoe.simple_atlas.advancement.ModCriteria;
 import rubbertoe.simple_atlas.component.AtlasContents;
 import rubbertoe.simple_atlas.component.ModComponents;
+import rubbertoe.simple_atlas.config.SimpleAtlasConfigManager;
 import rubbertoe.simple_atlas.item.ModItems;
 import rubbertoe.simple_atlas.navigation.WaypointIconCatalog;
 import rubbertoe.simple_atlas.server.AtlasWaypointDecorations;
@@ -271,9 +272,10 @@ public final class ModNetworking {
             return List.of();
         }
 
-        List<AtlasContents.WaypointData> sanitized = new ArrayList<>(Math.min(waypoints.size(), MAX_WAYPOINT_COUNT));
+        int maxWaypoints = SimpleAtlasConfigManager.getMaxWaypoints();
+        List<AtlasContents.WaypointData> sanitized = new ArrayList<>(Math.min(waypoints.size(), maxWaypoints));
         for (AtlasContents.WaypointData waypoint : waypoints) {
-            if (sanitized.size() >= MAX_WAYPOINT_COUNT) {
+            if (sanitized.size() >= maxWaypoints) {
                 break;
             }
 

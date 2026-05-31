@@ -28,13 +28,13 @@ import org.jspecify.annotations.NonNull;
 
 import java.util.function.Consumer;
 import rubbertoe.simple_atlas.advancement.ModCriteria;
+import rubbertoe.simple_atlas.config.SimpleAtlasConfigManager;
 import rubbertoe.simple_atlas.layout.AtlasLayout;
 import rubbertoe.simple_atlas.layout.AtlasLayoutBuilder;
 import rubbertoe.simple_atlas.component.AtlasContents;
 import rubbertoe.simple_atlas.component.ModComponents;
 import rubbertoe.simple_atlas.navigation.WaypointIconCatalog;
 import rubbertoe.simple_atlas.network.AtlasTilePayload;
-import rubbertoe.simple_atlas.network.ModNetworking;
 import rubbertoe.simple_atlas.network.OpenAtlasScreenPayload;
 import rubbertoe.simple_atlas.map.AtlasMapSelector;
 import rubbertoe.simple_atlas.server.AtlasViewManager;
@@ -63,9 +63,10 @@ public class AtlasItem extends Item {
         ItemStack atlasStack = context.getItemInHand();
         AtlasContents contents = atlasStack.getOrDefault(ModComponents.ATLAS_CONTENTS, AtlasContents.EMPTY);
 
-        if (contents.waypoints().size() >= ModNetworking.MAX_WAYPOINT_COUNT) {
+        int maxWaypoints = SimpleAtlasConfigManager.getMaxWaypoints();
+        if (contents.waypoints().size() >= maxWaypoints) {
             player.sendSystemMessage(
-                    Component.translatable("message.simple_atlas.waypoint_limit_reached", ModNetworking.MAX_WAYPOINT_COUNT)
+                    Component.translatable("message.simple_atlas.waypoint_limit_reached", maxWaypoints)
                             .withStyle(ChatFormatting.RED)
             );
             return InteractionResult.SUCCESS_SERVER;

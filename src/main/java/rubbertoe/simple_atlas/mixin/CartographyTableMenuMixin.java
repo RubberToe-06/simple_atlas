@@ -22,6 +22,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import rubbertoe.simple_atlas.component.AtlasContents;
 import rubbertoe.simple_atlas.cartography.AtlasCartographyScaler;
 import rubbertoe.simple_atlas.component.ModComponents;
+import rubbertoe.simple_atlas.config.SimpleAtlasConfigManager;
 import rubbertoe.simple_atlas.item.ModItems;
 
 import java.util.ArrayList;
@@ -155,7 +156,7 @@ public abstract class CartographyTableMenuMixin {
             LinkedHashSet<Integer> mergedMapIds = new LinkedHashSet<>(bottomContents.mapIds());
             mergedMapIds.addAll(topContents.mapIds());
             int mergedMapCount = mergedMapIds.size();
-            if (mergedMapCount > AtlasContents.MAX_ATLAS_MAP_COUNT) {
+            if (mergedMapCount > SimpleAtlasConfigManager.getMaxAtlasMapCount()) {
                 simple_atlas$rejectAtlasResult();
                 ci.cancel();
                 return;

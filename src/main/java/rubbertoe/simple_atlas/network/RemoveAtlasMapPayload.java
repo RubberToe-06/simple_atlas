@@ -21,7 +21,7 @@ public record RemoveAtlasMapPayload(
 
     public static final StreamCodec<RegistryFriendlyByteBuf, RemoveAtlasMapPayload> CODEC =
             StreamCodec.composite(
-                    ByteBufCodecs.collection(ArrayList::new, ByteBufCodecs.INT, AtlasContents.MAX_ATLAS_MAP_COUNT),
+                    ByteBufCodecs.collection(ArrayList::new, ByteBufCodecs.INT, AtlasContents.HARD_MAX_ATLAS_MAP_COUNT),
                     payload -> new ArrayList<>(payload.atlasMapIds()),
                     ByteBufCodecs.INT,
                     RemoveAtlasMapPayload::mapId,

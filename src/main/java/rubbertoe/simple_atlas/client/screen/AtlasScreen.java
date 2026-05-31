@@ -26,6 +26,7 @@ import org.lwjgl.glfw.GLFW;
 import rubbertoe.simple_atlas.SimpleAtlas;
 import rubbertoe.simple_atlas.client.input.ModKeyBindings;
 import rubbertoe.simple_atlas.component.AtlasContents;
+import rubbertoe.simple_atlas.config.SimpleAtlasConfigManager;
 import rubbertoe.simple_atlas.client.screen.icon.AtlasIcon;
 import rubbertoe.simple_atlas.client.screen.icon.PlayerAtlasIcon;
 import rubbertoe.simple_atlas.client.screen.icon.StaticAtlasIcon;
@@ -333,8 +334,8 @@ public class AtlasScreen extends Screen {
                 PLAYER_MARKER_TEXTURE,
                 PLAYER_MARKER_TEXTURE_SIZE,
                 PLAYER_MARKER_TEXTURE_SIZE,
-                PLAYER_MARKER_RENDER_SIZE,
-                PLAYER_MARKER_RENDER_SIZE
+                (int) Math.round(PLAYER_MARKER_RENDER_SIZE * SimpleAtlasConfigManager.getPlayerIconSize()),
+                (int) Math.round(PLAYER_MARKER_RENDER_SIZE * SimpleAtlasConfigManager.getPlayerIconSize())
         );
         this.atlasIcons = new ArrayList<>();
         this.atlasIcons.add(this.playerIcon);
@@ -549,12 +550,13 @@ public class AtlasScreen extends Screen {
     private AtlasIcon createWaypointIcon(double worldX, double worldZ, Component title, int iconIndex) {
         int resolvedIconIndex = waypointIconOptions.isEmpty() ? 0 : Math.floorMod(iconIndex, waypointIconOptions.size());
         WaypointIconOption option = waypointIconOptions.get(resolvedIconIndex);
+        int scaledWaypointRenderSize = (int) Math.round(WAYPOINT_RENDER_SIZE * SimpleAtlasConfigManager.getWaypointIconSize());
         return new StaticAtlasIcon(
                 option.texture(),
                 WAYPOINT_TEXTURE_SIZE,
                 WAYPOINT_TEXTURE_SIZE,
-                WAYPOINT_RENDER_SIZE,
-                WAYPOINT_RENDER_SIZE,
+                scaledWaypointRenderSize,
+                scaledWaypointRenderSize,
                 worldX,
                 worldZ,
                 title
@@ -861,6 +863,9 @@ public class AtlasScreen extends Screen {
     }
 
     private void beginNewWaypoint(WorldPoint worldPoint) {
+        if (SimpleAtlasConfigManager.isBannerWaypointsOnly()) {
+            return; // Waypoints can only be created via banners
+        }
         String defaultName = "Waypoint " + nextWaypointNumber;
         String selectedDimension = (selectedBookmarkTab < dimensionTabs.size())
                 ? dimensionTabs.get(selectedBookmarkTab)
@@ -1195,7 +1200,9 @@ public class AtlasScreen extends Screen {
             if (canUseTeleportCommand()) {
                 addWorldContextMenuButton(optionIndex++, Component.translatable("menu.simple_atlas.teleport"), 0xFFFF5EFF, worldPoint);
             }
-            addWorldContextMenuButton(optionIndex++, Component.translatable("menu.simple_atlas.map.new_waypoint"), 0xFFFFFFFF, worldPoint);
+            if (!SimpleAtlasConfigManager.isBannerWaypointsOnly()) {
+                addWorldContextMenuButton(optionIndex++, Component.translatable("menu.simple_atlas.map.new_waypoint"), 0xFFFFFFFF, worldPoint);
+            }
             addWorldContextMenuButton(optionIndex++, Component.translatable("menu.simple_atlas.copy_coordinates"), 0xFFFFFFFF, worldPoint);
             addWorldContextMenuButton(optionIndex, Component.translatable("menu.simple_atlas.map.remove"), 0xFFFF8080, worldPoint);
         }

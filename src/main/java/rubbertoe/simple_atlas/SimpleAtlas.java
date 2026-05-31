@@ -5,6 +5,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import rubbertoe.simple_atlas.advancement.ModCriteria;
 import rubbertoe.simple_atlas.component.ModComponents;
+import rubbertoe.simple_atlas.config.SimpleAtlasConfigManager;
 import rubbertoe.simple_atlas.item.ModItems;
 import rubbertoe.simple_atlas.map.ModMapDecorationTypes;
 import rubbertoe.simple_atlas.network.ModNetworking;
@@ -16,6 +17,7 @@ public class SimpleAtlas implements ModInitializer {
 
 	@Override
 	public void onInitialize() {
+		SimpleAtlasConfigManager.load();
 		ModItems.initialize();
 		ModMapDecorationTypes.initialize();
 		ModComponents.initialize();

@@ -37,6 +37,18 @@ public class SimpleAtlasLangProvider extends FabricLanguageProvider {
         translationBuilder.add("message.simple_atlas.no_maps_inserted", "Your atlas has no maps inserted");
         translationBuilder.add("tooltip.simple_atlas.no_maps", "No maps inserted");
         translationBuilder.add("tooltip.simple_atlas.scale", "Scale: (1:%s)");
+        translationBuilder.add("config.simple_atlas.title", "Simple Atlas Config");
+        translationBuilder.add("config.simple_atlas.category.general", "General");
+        translationBuilder.add("config.simple_atlas.max_atlas_map_count", "Max maps per atlas");
+        translationBuilder.add("config.simple_atlas.max_atlas_map_count.tooltip", "Maximum number of maps that can be stored in one atlas");
+        translationBuilder.add("config.simple_atlas.max_waypoints", "Max waypoints per atlas");
+        translationBuilder.add("config.simple_atlas.max_waypoints.tooltip", "Maximum number of waypoints that can be added to an atlas");
+        translationBuilder.add("config.simple_atlas.banner_waypoints_only", "Banner waypoints only");
+        translationBuilder.add("config.simple_atlas.banner_waypoints_only.tooltip", "When enabled, waypoints can only be created by using the atlas on a banner");
+        translationBuilder.add("config.simple_atlas.waypoint_icon_size", "Waypoint icon size");
+        translationBuilder.add("config.simple_atlas.waypoint_icon_size.tooltip", "Scale factor for waypoint icons (0.5 to 2.0)");
+        translationBuilder.add("config.simple_atlas.player_icon_size", "Player icon size");
+        translationBuilder.add("config.simple_atlas.player_icon_size.tooltip", "Scale factor for the player marker (0.5 to 2.0)");
         translationBuilder.add("advancements.simple-atlas.adventure.craft_atlas.title", "Paper Trail");
         translationBuilder.add("advancements.simple-atlas.adventure.craft_atlas.description", "Obtain an empty Atlas");
         translationBuilder.add("advancements.simple-atlas.adventure.old_fashioned.title", "Old Fashioned");
