@@ -5,7 +5,7 @@ import net.fabricmc.fabric.api.datagen.v1.provider.FabricAdvancementProvider;
 import net.minecraft.advancements.Advancement;
 import net.minecraft.advancements.AdvancementHolder;
 import net.minecraft.advancements.AdvancementType;
-import net.minecraft.advancements.criterion.InventoryChangeTrigger;
+import net.minecraft.advancements.triggers.InventoryChangeTrigger;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.data.advancements.AdvancementSubProvider;
 import net.minecraft.network.chat.Component;
@@ -46,7 +46,7 @@ public class SimpleAtlasAdvancementProvider extends FabricAdvancementProvider {
         Advancement.Builder.advancement()
                 .parent(craftAtlas)
                 .display(
-                        Items.WHITE_BANNER,
+                        Items.BANNER.white(),
                         Component.translatable("advancements.simple-atlas.adventure.old_fashioned.title"),
                         Component.translatable("advancements.simple-atlas.adventure.old_fashioned.description"),
                         null,

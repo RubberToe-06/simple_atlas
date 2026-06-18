@@ -3,7 +3,7 @@ package rubbertoe.simple_atlas.advancement;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
-import net.minecraft.advancements.CriterionTrigger;
+import net.minecraft.advancements.triggers.CriterionTrigger;
 import rubbertoe.simple_atlas.SimpleAtlas;
 
 public final class ModCriteria {
