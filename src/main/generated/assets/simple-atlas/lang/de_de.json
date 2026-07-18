@@ -30,7 +30,7 @@
   "gui.simple_atlas.waypoint.new_title": "Neuer Wegpunkt",
   "gui.simple_atlas.waypoint_name": "Name des Wegpunkts",
   "item.simple-atlas.map_atlas": "Atlas",
-  "key.category.simple-atlas.atlas": "Einfacher Atlas",
+  "key.category.simple-atlas.atlas": "Simple Atlas",
   "key.simple_atlas.reset_zoom": "Zoom zurücksetzen",
   "menu.simple_atlas.copy_coordinates": "Koordinaten kopieren",
   "menu.simple_atlas.map.new_waypoint": "Neuer Wegpunkt",
