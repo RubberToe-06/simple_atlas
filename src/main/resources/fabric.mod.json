@@ -8,7 +8,9 @@
 		"RubberToe"
 	],
 	"contact": {
-		"sources": "https://github.com/RubberToe-06/simple_atlas"
+		"homepage": "https://github.com/RubberToe-06/simple_atlas",
+		"sources": "https://github.com/RubberToe-06/simple_atlas",
+		"issues": "https://github.com/RubberToe-06/simple_atlas/issues"
 	},
 	"license": "MIT",
 	"icon": "assets/simple_atlas/icon.png",
@@ -24,15 +26,15 @@
 			"rubbertoe.simple_atlas.config.SimpleAtlasModMenuIntegration"
 		],
 		"fabric-datagen": [
-          "rubbertoe.simple_atlas.datagen.SimpleAtlasDataGenerator"
+			"rubbertoe.simple_atlas.datagen.SimpleAtlasDataGenerator"
 		]
 	},
 	"mixins": [
 		"simple_atlas.mixins.json"
 	],
 	"depends": {
-		"fabricloader": ">=0.19.3",
-		"minecraft": "~26.2",
+		"fabricloader": ">=${loader_version}",
+		"minecraft": "~${minecraft_version}",
 		"java": ">=25",
 		"fabric-api": "*",
 		"cloth-config": "*"
