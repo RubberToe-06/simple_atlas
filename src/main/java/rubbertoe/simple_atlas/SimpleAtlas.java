@@ -12,7 +12,7 @@ import rubbertoe.simple_atlas.network.ModNetworking;
 import rubbertoe.simple_atlas.server.AtlasViewTicker;
 
 public class SimpleAtlas implements ModInitializer {
-	public static final String MOD_ID = "simple-atlas";
+	public static final String MOD_ID = "simple_atlas";
 	public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
 	@Override

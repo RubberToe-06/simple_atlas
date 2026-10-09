@@ -13,7 +13,9 @@ import java.nio.file.Path;
 
 public final class SimpleAtlasConfigManager {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-    private static final Path CONFIG_PATH = FabricLoader.getInstance().getConfigDir().resolve("simple-atlas.json");
+    private static final Path CONFIG_PATH = FabricLoader.getInstance().getConfigDir().resolve("simple_atlas.json");
+    /** Config file name used before the mod ID changed from simple-atlas to simple_atlas (mod version 2.0.0). */
+    private static final Path LEGACY_CONFIG_PATH = FabricLoader.getInstance().getConfigDir().resolve("simple-atlas.json");
 
     private static SimpleAtlasConfig config = new SimpleAtlasConfig();
 
@@ -43,7 +45,22 @@ public final class SimpleAtlasConfigManager {
         return config.playerIconSize;
     }
 
+    private static void migrateLegacyConfig() {
+        if (Files.exists(CONFIG_PATH) || Files.notExists(LEGACY_CONFIG_PATH)) {
+            return;
+        }
+
+        try {
+            Files.move(LEGACY_CONFIG_PATH, CONFIG_PATH);
+            SimpleAtlas.LOGGER.info("Migrated config {} -> {}", LEGACY_CONFIG_PATH.getFileName(), CONFIG_PATH.getFileName());
+        } catch (IOException e) {
+            SimpleAtlas.LOGGER.warn("Could not migrate legacy config {}, using defaults.", LEGACY_CONFIG_PATH.getFileName(), e);
+        }
+    }
+
     public static void load() {
+        migrateLegacyConfig();
+
         if (Files.notExists(CONFIG_PATH)) {
             config = sanitize(new SimpleAtlasConfig());
             save();

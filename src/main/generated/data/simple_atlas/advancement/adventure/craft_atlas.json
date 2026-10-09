@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:adventure/root",
+  "criteria": {
+    "has_atlas": {
+      "conditions": {
+        "items": [
+          {
+            "items": "simple_atlas:map_atlas"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    }
+  },
+  "display": {
+    "description": {
+      "translate": "advancements.simple_atlas.adventure.craft_atlas.description"
+    },
+    "icon": {
+      "id": "simple_atlas:map_atlas"
+    },
+    "title": {
+      "translate": "advancements.simple_atlas.adventure.craft_atlas.title"
+    }
+  },
+  "requirements": [
+    [
+      "has_atlas"
+    ]
+  ],
+  "sends_telemetry_event": true
+}
