@@ -32,8 +32,8 @@ public class SimpleAtlasAdvancementProvider extends FabricAdvancementProvider {
                 .parent(AdvancementSubProvider.createPlaceholder("minecraft:adventure/root"))
                 .display(
                         ModItems.ATLAS,
-                        Component.translatable("advancements.simple-atlas.adventure.craft_atlas.title"),
-                        Component.translatable("advancements.simple-atlas.adventure.craft_atlas.description"),
+                        Component.translatable("advancements.simple_atlas.adventure.craft_atlas.title"),
+                        Component.translatable("advancements.simple_atlas.adventure.craft_atlas.description"),
                         null,
                         AdvancementType.TASK,
                         true,
@@ -47,8 +47,8 @@ public class SimpleAtlasAdvancementProvider extends FabricAdvancementProvider {
                 .parent(craftAtlas)
                 .display(
                         Items.BANNER.white(),
-                        Component.translatable("advancements.simple-atlas.adventure.old_fashioned.title"),
-                        Component.translatable("advancements.simple-atlas.adventure.old_fashioned.description"),
+                        Component.translatable("advancements.simple_atlas.adventure.old_fashioned.title"),
+                        Component.translatable("advancements.simple_atlas.adventure.old_fashioned.description"),
                         null,
                         AdvancementType.TASK,
                         true,
@@ -62,8 +62,8 @@ public class SimpleAtlasAdvancementProvider extends FabricAdvancementProvider {
                 .parent(craftAtlas)
                 .display(
                         Items.BOOK,
-                        Component.translatable("advancements.simple-atlas.adventure.backup_copy.title"),
-                        Component.translatable("advancements.simple-atlas.adventure.backup_copy.description"),
+                        Component.translatable("advancements.simple_atlas.adventure.backup_copy.title"),
+                        Component.translatable("advancements.simple_atlas.adventure.backup_copy.description"),
                         null,
                         AdvancementType.TASK,
                         true,
@@ -77,8 +77,8 @@ public class SimpleAtlasAdvancementProvider extends FabricAdvancementProvider {
                 .parent(craftAtlas)
                 .display(
                         Items.CARTOGRAPHY_TABLE,
-                        Component.translatable("advancements.simple-atlas.adventure.better_together.title"),
-                        Component.translatable("advancements.simple-atlas.adventure.better_together.description"),
+                        Component.translatable("advancements.simple_atlas.adventure.better_together.title"),
+                        Component.translatable("advancements.simple_atlas.adventure.better_together.description"),
                         null,
                         AdvancementType.TASK,
                         true,
@@ -92,8 +92,8 @@ public class SimpleAtlasAdvancementProvider extends FabricAdvancementProvider {
                 .parent(craftAtlas)
                 .display(
                         Items.SPYGLASS,
-                        Component.translatable("advancements.simple-atlas.adventure.bigger_picture.title"),
-                        Component.translatable("advancements.simple-atlas.adventure.bigger_picture.description"),
+                        Component.translatable("advancements.simple_atlas.adventure.bigger_picture.title"),
+                        Component.translatable("advancements.simple_atlas.adventure.bigger_picture.description"),
                         null,
                         AdvancementType.TASK,
                         true,
@@ -107,8 +107,8 @@ public class SimpleAtlasAdvancementProvider extends FabricAdvancementProvider {
                 .parent(craftAtlas)
                 .display(
                         Items.COMPASS,
-                        Component.translatable("advancements.simple-atlas.adventure.marco.title"),
-                        Component.translatable("advancements.simple-atlas.adventure.marco.description"),
+                        Component.translatable("advancements.simple_atlas.adventure.marco.title"),
+                        Component.translatable("advancements.simple_atlas.adventure.marco.description"),
                         null,
                         AdvancementType.TASK,
                         true,

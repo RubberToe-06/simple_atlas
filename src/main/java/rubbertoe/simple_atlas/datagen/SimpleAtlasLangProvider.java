@@ -49,19 +49,19 @@ public class SimpleAtlasLangProvider extends FabricLanguageProvider {
         translationBuilder.add("config.simple_atlas.waypoint_icon_size.tooltip", "Scale factor for waypoint icons (0.5 to 2.0)");
         translationBuilder.add("config.simple_atlas.player_icon_size", "Player icon size");
         translationBuilder.add("config.simple_atlas.player_icon_size.tooltip", "Scale factor for the player marker (0.5 to 2.0)");
-        translationBuilder.add("advancements.simple-atlas.adventure.craft_atlas.title", "Paper Trail");
-        translationBuilder.add("advancements.simple-atlas.adventure.craft_atlas.description", "Obtain an empty Atlas");
-        translationBuilder.add("advancements.simple-atlas.adventure.old_fashioned.title", "Old Fashioned");
-        translationBuilder.add("advancements.simple-atlas.adventure.old_fashioned.description", "Add a waypoint to an Atlas using a banner");
-        translationBuilder.add("advancements.simple-atlas.adventure.backup_copy.title", "Backup Copy");
-        translationBuilder.add("advancements.simple-atlas.adventure.backup_copy.description", "Duplicate an Atlas with a book at a cartography table");
-        translationBuilder.add("advancements.simple-atlas.adventure.better_together.title", "Better Together");
-        translationBuilder.add("advancements.simple-atlas.adventure.better_together.description", "Merge two Atlases at a cartography table");
-        translationBuilder.add("advancements.simple-atlas.adventure.bigger_picture.title", "Bigger Picture");
-        translationBuilder.add("advancements.simple-atlas.adventure.bigger_picture.description", "Upscale an Atlas with paper at a cartography table");
-        translationBuilder.add("advancements.simple-atlas.adventure.marco.title", "Marco!");
-        translationBuilder.add("advancements.simple-atlas.adventure.marco.description", "Pin a waypoint to the locator bar");
-        translationBuilder.add("key.category.simple-atlas.atlas", "Simple Atlas");
+        translationBuilder.add("advancements.simple_atlas.adventure.craft_atlas.title", "Paper Trail");
+        translationBuilder.add("advancements.simple_atlas.adventure.craft_atlas.description", "Obtain an empty Atlas");
+        translationBuilder.add("advancements.simple_atlas.adventure.old_fashioned.title", "Old Fashioned");
+        translationBuilder.add("advancements.simple_atlas.adventure.old_fashioned.description", "Add a waypoint to an Atlas using a banner");
+        translationBuilder.add("advancements.simple_atlas.adventure.backup_copy.title", "Backup Copy");
+        translationBuilder.add("advancements.simple_atlas.adventure.backup_copy.description", "Duplicate an Atlas with a book at a cartography table");
+        translationBuilder.add("advancements.simple_atlas.adventure.better_together.title", "Better Together");
+        translationBuilder.add("advancements.simple_atlas.adventure.better_together.description", "Merge two Atlases at a cartography table");
+        translationBuilder.add("advancements.simple_atlas.adventure.bigger_picture.title", "Bigger Picture");
+        translationBuilder.add("advancements.simple_atlas.adventure.bigger_picture.description", "Upscale an Atlas with paper at a cartography table");
+        translationBuilder.add("advancements.simple_atlas.adventure.marco.title", "Marco!");
+        translationBuilder.add("advancements.simple_atlas.adventure.marco.description", "Pin a waypoint to the locator bar");
+        translationBuilder.add("key.category.simple_atlas.atlas", "Simple Atlas");
         translationBuilder.add("key.simple_atlas.reset_zoom", "Reset Zoom");
     }
 }

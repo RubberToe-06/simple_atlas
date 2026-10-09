@@ -1,6 +1,6 @@
 {
 	"schemaVersion": 1,
-	"id": "simple-atlas",
+	"id": "simple_atlas",
 	"version": "${version}",
 	"name": "Simple Atlas",
 	"description": "Adds a no-nonsense Vanilla+ atlas for all your mapping needs.",
@@ -11,7 +11,7 @@
 		"sources": "https://github.com/RubberToe-06/simple_atlas"
 	},
 	"license": "MIT",
-	"icon": "assets/simple-atlas/icon.png",
+	"icon": "assets/simple_atlas/icon.png",
 	"environment": "*",
 	"entrypoints": {
 		"main": [
@@ -28,7 +28,7 @@
 		]
 	},
 	"mixins": [
-		"simple-atlas.mixins.json"
+		"simple_atlas.mixins.json"
 	],
 	"depends": {
 		"fabricloader": ">=0.19.3",
