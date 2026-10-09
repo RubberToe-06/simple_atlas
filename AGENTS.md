@@ -1,8 +1,10 @@
 # AGENTS.md
 
 ## Project Snapshot
-- Fabric mod (`simple-atlas`) for Minecraft `26.1`, Java `25`, Loom `1.15-SNAPSHOT`.
-- `gradle.properties` currently pins: loader `0.18.6`, Fabric API `0.145.1+26.1`, mod version `1.0.1`.
+- Fabric mod (`simple_atlas`) for Minecraft `26.2`, Java `25`. All versions (MC, loader, Fabric API, Loom, mod) live in `gradle.properties` — read them there rather than trusting this file.
+- Mod ID / resource namespace is `simple_atlas` (changed from `simple-atlas` in 2.0.0; the config file is migrated by `SimpleAtlasConfigManager`).
+- Branches: `main` is the only actively developed branch (latest MC). `legacy/<mc-version>` branches are frozen snapshots for community backports — do not port features to them.
+- Jar version is `<mod_version>+<minecraft_version>`; bump only `mod_version`.
 - Main package: `src/main/java/rubbertoe/simple_atlas`.
 - Entrypoints in `src/main/resources/fabric.mod.json`: `main`, `client`, `fabric-datagen`.
 
@@ -49,13 +51,13 @@
 - Pin IDs are deterministic from floored waypoint coordinates via `WaypointIconCatalog.navigationWaypointId(...)` (not persisted in `AtlasContents`).
 
 ## Developer Workflows
-- Build: `./gradlew.bat build`
-- Run client: `./gradlew.bat runClient`
-- Run dedicated server: `./gradlew.bat runServer`
-- Regenerate data assets: `./gradlew.bat runDatagen`
-- List tasks: `./gradlew.bat tasks --all`
+- Build: `./gradlew build`
+- Run client: `./gradlew runClient`
+- Run dedicated server: `./gradlew runServer`
+- Regenerate data assets: `./gradlew runDatagen` (output in `src/main/generated` is committed; CI fails if it is missing)
+- List tasks: `./gradlew tasks --all`
 - Current repo has no `src/test` sources.
-- CI reference: `.github/workflows/build.yml` runs `./gradlew build` on Ubuntu `24.04` with Java `25`.
+- CI reference: `.github/workflows/build.yml` (identical in functional_trims) runs `./gradlew build` on Ubuntu `24.04` with Java `25` for main, `legacy/**`, and PRs.
 
 ## Agent Tooling Notes
 - Use the available `minecraft-dev-*` tools to inspect Minecraft internals (class APIs, packets, registries, mappings) before editing version-sensitive logic.
@@ -69,8 +71,8 @@
 - Keep waypoint limits aligned: name length `32`, server waypoint cap `256`.
 - Keep waypoint icon sets in sync across:
   - `navigation/WaypointIconCatalog.java`
-  - `assets/simple-atlas/textures/gui/icons/*.png`
-  - `assets/simple-atlas/waypoint_style/*.json`
+  - `assets/simple_atlas/textures/gui/icons/*.png`
+  - `assets/simple_atlas/waypoint_style/*.json`
 - Treat `src/main/generated` as datagen output; edit providers under `datagen/*Provider.java` instead of generated JSON.
 - Keep mixin helper prefixes as `simple_atlas$...`.
 - Keep client/server responsibilities separated (`client/*` vs `server/*`).

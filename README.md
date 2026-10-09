@@ -61,10 +61,13 @@ Simple Atlas adds an **Atlas** item that stores multiple filled maps and opens i
 
 ## Compatibility
 
-- **Minecraft:** `26.1.x`
-- **Loader:** Fabric (`fabric-loader >= 0.18.6`)
+- **Minecraft:** `26.2` (older versions are frozen on `legacy/*` branches; see [CONTRIBUTING.md](CONTRIBUTING.md#supported-versions))
+- **Loader:** Fabric
 - **Java:** `25+`
-- **Fabric API:** required
+- **Requires:** Fabric API, Cloth Config API; Mod Menu optional
+
+> **Upgrading from 1.x:** version 2.0.0 changes the mod ID from `simple-atlas` to `simple_atlas`.
+> Atlases from older worlds will not carry over. Your config file is migrated automatically.
 
 ## Notes
 
@@ -72,6 +75,9 @@ Simple Atlas adds an **Atlas** item that stores multiple filled maps and opens i
 - Waypoint and navigation state is tied to each atlas item.
 - Teleport actions in the atlas UI use player commands and may require permission depending on the server.
 - Designed for both singleplayer and multiplayer survival workflows.
+
+## Contributing
+Contributions and translations are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Issues/Feedback
 - Report bugs or suggest improvements on the [GitHub Issues](https://github.com/RubberToe-06/simple_atlas/issues) page
